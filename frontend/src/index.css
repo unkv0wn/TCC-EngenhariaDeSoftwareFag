@@ -1,0 +1,73 @@
+/* 
+  RouteWise Design System Tokens
+  Dark theme, vibrant accents, glassmorphism
+*/
+
+:root {
+  /* Colors - Base/Backgrounds */
+  --rw-bg-app: #f2f1e9;      /* soft-linen */
+  --rw-bg-panel: rgba(242, 241, 233, 0.85);
+  --rw-bg-card: #ffffff;
+  
+  /* Colors - Text */
+  --rw-text-primary: #14130e; /* pitch-black */
+  --rw-text-secondary: #8a7a4e; /* olive-wood */
+  --rw-text-muted: rgba(20, 19, 14, 0.6);
+  
+  /* Colors - Primary Accent */
+  --rw-primary: #542059; /* deep-purple */
+  --rw-primary-hover: rgba(84, 32, 89, 0.85);
+  --rw-primary-active: #14130e;
+  --rw-primary-light: rgba(84, 32, 89, 0.1);
+  
+  /* Colors - Success & Error */
+  --rw-success: #8a7a4e; /* olive-wood as success alternative */
+  --rw-success-light: rgba(138, 122, 78, 0.2);
+  --rw-success-border: #8a7a4e;
+  
+  --rw-error: #f43f5e;
+  --rw-error-light: rgba(244, 63, 94, 0.2);
+  
+  /* Borders & Shadows */
+  --rw-border: rgba(20, 19, 14, 0.1);
+  --rw-border-strong: rgba(20, 19, 14, 0.2);
+  --rw-shadow-sm: 0 1px 2px 0 rgba(20, 19, 14, 0.05);
+  --rw-shadow-md: 0 4px 6px -1px rgba(20, 19, 14, 0.1), 0 2px 4px -1px rgba(20, 19, 14, 0.06);
+  --rw-shadow-lg: 0 10px 15px -3px rgba(20, 19, 14, 0.1), 0 4px 6px -2px rgba(20, 19, 14, 0.05);
+  --rw-shadow-glow: 0 0 15px rgba(125, 249, 255, 0.8); /* electric-aqua glow */
+  
+  /* Typography */
+  --rw-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --rw-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  
+  /* Border Radius */
+  --rw-radius-sm: 0.25rem;
+  --rw-radius-md: 0.5rem;
+  --rw-radius-lg: 0.75rem;
+  --rw-radius-full: 9999px;
+  
+  /* Transitions */
+  --rw-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --rw-transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Layout */
+  --rw-sidebar-width: 400px;
+}
+
+/* Base resets and typography */
+body {
+  margin: 0;
+  font-family: var(--rw-font-sans);
+  background-color: var(--rw-bg-app);
+  color: var(--rw-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font-family: var(--rw-font-sans);
+}

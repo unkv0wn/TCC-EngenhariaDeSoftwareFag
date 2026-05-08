@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+           https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.routewise</groupId>
+  <artifactId>routewise-backend</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <name>routewise-backend</name>
+  <description>RouteWise — Urban Route Optimizer Backend (TCC)</description>
+
+  <properties>
+    <java.version>21</java.version>
+  </properties>
+
+  <!-- osm4j and its transitive dependencies require custom repositories -->
+  <repositories>
+    <!-- Primary osm4j repository -->
+    <repository>
+      <id>topobyte</id>
+      <url>https://mvn.topobyte.de/</url>
+    </repository>
+    <!-- slimjars — provides trove4j-* artifacts required by osm4j-core 1.x -->
+    <repository>
+      <id>slimjars</id>
+      <url>https://mvn.slimjars.com/</url>
+    </repository>
+  </repositories>
+
+  <dependencies>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         Spring Boot
+    ═══════════════════════════════════════════════════════════════════ -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         OpenStreetMap data parsing — osm4j 1.4.1 (latest stable)
+         Requires: topobyte repo + slimjars repo (for trove4j transitive deps)
+    ═══════════════════════════════════════════════════════════════════ -->
+    <dependency>
+      <groupId>de.topobyte</groupId>
+      <artifactId>osm4j-core</artifactId>
+      <version>1.4.1</version>
+    </dependency>
+
+    <!-- XML (.osm) format reader -->
+    <dependency>
+      <groupId>de.topobyte</groupId>
+      <artifactId>osm4j-xml</artifactId>
+      <version>1.4.1</version>
+    </dependency>
+
+    <!-- PBF (Protocol Buffers) format reader -->
+    <dependency>
+      <groupId>de.topobyte</groupId>
+      <artifactId>osm4j-pbf</artifactId>
+      <version>1.4.1</version>
+    </dependency>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         Testing
+    ═══════════════════════════════════════════════════════════════════ -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
