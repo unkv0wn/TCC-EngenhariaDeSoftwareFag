@@ -52,35 +52,47 @@ export default function SummaryPanel({ result, selectedSegment, onSegmentClick }
       </div>
 
       {/* Per-segment breakdown */}
-      {result.segments && result.segments.length > 0 && (
-        <div className="rw-segments">
-          <h4 className="rw-segments-title">Segments</h4>
-          <ul className="rw-segment-list" role="list" aria-label="Route segments">
-            {result.segments.map((seg) => (
-              <li 
-                key={seg.segmentIndex} 
-                className={`rw-segment-item ${selectedSegment === seg.segmentIndex ? 'rw-segment-item-selected' : ''}`}
-                onClick={() => onSegmentClick(seg.segmentIndex)}
-              >
-                <span
-                  className="rw-segment-color"
-                  style={{ backgroundColor: seg.color }}
-                  aria-hidden="true"
-                />
-                <span className="rw-segment-label">
-                  {seg.fromWpIndex + 1} → {seg.toWpIndex + 1}
-                </span>
-                <span className="rw-segment-detail">
-                  {formatDistance(seg.distanceKm)}
-                </span>
-                <span className="rw-segment-detail rw-segment-duration">
-                  {formatDuration(seg.durationMin)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {result.segments && result.segments.length > 0 && (() => {
+        const total = result.orderedWaypoints.length;
+        const isFixedEnds = result.routeMode === 'FIXED_START_END' || result.routeMode === 'OPEN_ROUTE';
+
+        /** Returns the visual label matching the map marker for a given optimized position */
+        const posLabel = (pos: number): string => {
+          if (isFixedEnds && pos === 0) return 'A';
+          if (isFixedEnds && pos === total - 1) return 'B';
+          return String(pos + 1);
+        };
+
+        return (
+          <div className="rw-segments">
+            <h4 className="rw-segments-title">Segments</h4>
+            <ul className="rw-segment-list" role="list" aria-label="Route segments">
+              {result.segments.map((seg) => (
+                <li 
+                  key={seg.segmentIndex} 
+                  className={`rw-segment-item ${selectedSegment === seg.segmentIndex ? 'rw-segment-item-selected' : ''}`}
+                  onClick={() => onSegmentClick(seg.segmentIndex)}
+                >
+                  <span
+                    className="rw-segment-color"
+                    style={{ backgroundColor: seg.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="rw-segment-label">
+                    {posLabel(seg.segmentIndex)} → {posLabel(seg.segmentIndex + 1)}
+                  </span>
+                  <span className="rw-segment-detail">
+                    {formatDistance(seg.distanceKm)}
+                  </span>
+                  <span className="rw-segment-detail rw-segment-duration">
+                    {formatDuration(seg.durationMin)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* OSRM validation */}
       {result.osrmValidation && result.osrmValidation.status === 'SUCCESS' && (

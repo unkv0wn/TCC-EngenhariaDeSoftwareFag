@@ -67,6 +67,25 @@ export function useSseListener(): IUseSseListenerReturn {
           setResult(data.payload);
           setStatus('COMPLETED');
           console.debug('[SSE] COMPLETED event received:', data.requestId);
+
+          // === DEBUG: trace waypoint ordering vs segment indices ===
+          console.group('[DEBUG] Route Ordering Analysis');
+          console.log('orderedWaypoints:', data.payload.orderedWaypoints.map((wp, i) => ({
+            position: i,
+            sequenceIndex: wp.sequenceIndex,
+            lat: wp.lat.toFixed(5),
+            lng: wp.lng.toFixed(5),
+          })));
+          console.log('segments:', data.payload.segments.map((seg) => ({
+            segmentIndex: seg.segmentIndex,
+            fromWpIndex: seg.fromWpIndex,
+            toWpIndex: seg.toWpIndex,
+            label: `${seg.fromWpIndex + 1} → ${seg.toWpIndex + 1}`,
+            distanceKm: seg.distanceKm,
+          })));
+          console.log('Map markers show position (0=A, 1=1, 2=2...) but segments show fromWpIndex/toWpIndex');
+          console.groupEnd();
+          // === END DEBUG ===
         }
       } catch {
         console.warn('[SSE] Failed to parse COMPLETED event data');
