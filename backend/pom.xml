@@ -20,6 +20,7 @@
 
   <properties>
     <java.version>21</java.version>
+    <start-class>com.routewise.RouteWiseApplication</start-class>
   </properties>
 
   <!-- osm4j and its transitive dependencies require custom repositories -->
@@ -96,6 +97,14 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.15.0</version>
+        <configuration>
+          <debug>false</debug>
+        </configuration>
       </plugin>
     </plugins>
   </build>
