@@ -20,6 +20,7 @@
 
   <properties>
     <java.version>21</java.version>
+    <start-class>com.routewise.RouteWiseApplication</start-class>
   </properties>
 
   <!-- osm4j and its transitive dependencies require custom repositories -->
@@ -81,6 +82,16 @@
     </dependency>
 
     <!-- ════════════════════════════════════════════════════════════════
+         Statistics — used by com.routewise.validation (empirical cost
+         validation experiment); not used anywhere in the production path.
+    ═══════════════════════════════════════════════════════════════════ -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-math3</artifactId>
+      <version>3.6.1</version>
+    </dependency>
+
+    <!-- ════════════════════════════════════════════════════════════════
          Testing
     ═══════════════════════════════════════════════════════════════════ -->
     <dependency>
@@ -96,6 +107,19 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.15.0</version>
+        <configuration>
+          <debug>false</debug>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.2.0</version>
       </plugin>
     </plugins>
   </build>
