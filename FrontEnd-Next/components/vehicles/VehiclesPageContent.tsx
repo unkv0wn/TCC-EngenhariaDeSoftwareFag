@@ -10,10 +10,12 @@ import { VehicleGrid } from "@/components/vehicles/VehicleGrid";
 import { VehicleTable } from "@/components/vehicles/VehicleTable";
 import { ViewToggle, type VehicleView } from "@/components/vehicles/ViewToggle";
 import { useVehicles, type Vehicle } from "@/hooks/useVehicles";
+import { useToast } from "@/hooks/useToast";
 import type { VehicleFormData } from "@/lib/validations/vehicle";
 
 export function VehiclesPageContent() {
   const { vehicles, createVehicle, updateVehicle, deleteVehicle } = useVehicles();
+  const { success } = useToast();
   const [view, setView] = useState<VehicleView>("cards");
   const [search, setSearch] = useState("");
   const [formVehicle, setFormVehicle] = useState<Vehicle | null>(null);
@@ -48,8 +50,10 @@ export function VehiclesPageContent() {
   function handleSubmit(data: VehicleFormData) {
     if (formVehicle) {
       updateVehicle(formVehicle.id, data);
+      success("Veículo atualizado", `${data.plate} foi atualizado com sucesso.`);
     } else {
       createVehicle(data);
+      success("Veículo cadastrado", `${data.plate} foi adicionado à frota.`);
     }
     closeForm();
   }
@@ -111,6 +115,7 @@ export function VehiclesPageContent() {
           onCancel={() => setVehicleToDelete(null)}
           onConfirm={() => {
             deleteVehicle(vehicleToDelete.id);
+            success("Veículo excluído", `${vehicleToDelete.plate} foi removido.`);
             setVehicleToDelete(null);
           }}
         />

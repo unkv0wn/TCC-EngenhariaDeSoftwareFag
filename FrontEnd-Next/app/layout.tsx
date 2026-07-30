@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist_Mono, Nunito } from "next/font/google";
 import "./globals.css";
 
+import { ToastProvider } from "@/components/ui/toast/ToastProvider";
+
 const nunito = Nunito({
   variable: "--font-nunito",
   subsets: ["latin"],
@@ -27,7 +29,9 @@ export default function RootLayout({
       lang="en"
       className={`${nunito.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }
