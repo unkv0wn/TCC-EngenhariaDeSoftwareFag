@@ -42,7 +42,7 @@ export function VehicleFormModal({ vehicle, onClose, onSubmit }: VehicleFormModa
   }, [vehicle, reset]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-gray-900/45 px-4 py-9">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/45 px-4 py-9">
       <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white shadow-xl shadow-gray-900/10">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <h2 className="text-base font-extrabold text-gray-900">
