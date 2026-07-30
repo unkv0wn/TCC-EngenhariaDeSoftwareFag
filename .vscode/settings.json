@@ -1,0 +1,16 @@
+{
+    "java.compile.nullAnalysis.mode": "automatic",
+    "files.exclude": {
+        ".vscode": true,
+        ".claude": true,
+        ".superpowers": true,
+        "**/node_modules": true,
+        "**/.next": true,
+        "**/dist": true,
+        "**/dist-ssr": true,
+        "backend/target": true,
+        "**/next-env.d.ts": true,
+        "**/tsconfig.tsbuildinfo": true,
+        "**/.DS_Store": true
+    }
+}

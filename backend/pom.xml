@@ -82,6 +82,16 @@
     </dependency>
 
     <!-- ════════════════════════════════════════════════════════════════
+         Statistics — used by com.routewise.validation (empirical cost
+         validation experiment); not used anywhere in the production path.
+    ═══════════════════════════════════════════════════════════════════ -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-math3</artifactId>
+      <version>3.6.1</version>
+    </dependency>
+
+    <!-- ════════════════════════════════════════════════════════════════
          Testing
     ═══════════════════════════════════════════════════════════════════ -->
     <dependency>
@@ -105,6 +115,11 @@
         <configuration>
           <debug>false</debug>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.2.0</version>
       </plugin>
     </plugins>
   </build>
