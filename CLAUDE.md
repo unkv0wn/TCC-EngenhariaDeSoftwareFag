@@ -105,6 +105,19 @@ Source of truth: `FrontEnd-Next/app/globals.css` (CSS custom properties, each wi
 
 `--background`/`--foreground` flip between `gray-50`/`gray-900` (light) and `gray-950`/`gray-50` (dark) via `prefers-color-scheme: dark`.
 
+## Component style patterns (`FrontEnd-Next`)
+
+Raw Tailwind utility classes composed with a `cn()` helper (clsx/tailwind-merge) — no component library (no shadcn/Radix). Primitives live in `components/ui/` (`Button`, `Input`, `Select`, `Checkbox`, `Divider`, `SocialButton`, `toast/*`).
+
+- **Buttons** (`Button.tsx`): 3 variants — `primary` (`bg-primary-600 text-white hover:bg-primary-700`), `secondary` (`bg-white border border-gray-200 hover:bg-gray-50`), `ghost` (`bg-transparent hover:bg-gray-100`). Shared base: `rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-150 ease-out`, focus via `focus-visible:ring-2 focus-visible:ring-primary-500`. No formal "danger" variant — produced ad hoc by overriding classes (see `DeleteVehicleDialog.tsx`). Icon-only buttons: `rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600`.
+- **Cards**: `rounded-xl border border-gray-200 bg-white`, no shadow by default (`hover:shadow-md` only on hover, e.g. `VehicleCard.tsx`).
+- **Modals/toasts** ("floating surfaces"): `rounded-2xl border border-gray-100 bg-white shadow-xl shadow-gray-900/10` — this pairing is the convention for anything overlaid on the page. No shared `<Modal>` primitive yet (`VehicleFormModal` / `DeleteVehicleDialog` duplicate the overlay/panel structure); no enter/exit animation on any of them.
+- **Inputs** (`Input.tsx`/`Select.tsx`): field base `rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm`, focus ring `focus:ring-2 focus:ring-primary-500/15 focus:border-primary-500` (translucent, unlike buttons' solid ring). Error state: `border-danger-300` + `focus:ring-danger-500/10`.
+- **`rounded-*` scale by hierarchy**: `rounded-md` (small icon buttons) → `rounded-lg` (default: buttons/inputs) → `rounded-xl` (cards) → `rounded-2xl` (modals/toasts) → `rounded-full` (pill badges only).
+- **Icons**: `lucide-react` everywhere except the hand-drawn Google/Microsoft SVGs in `SocialButton.tsx`. Default size `h-4 w-4`; decorative icons get `aria-hidden="true"`.
+- **Dark mode**: components do **not** use Tailwind `dark:` classes anywhere — dark mode only repaints `body` background/foreground via the CSS variables above. Cards/modals/inputs/toasts hardcode light-mode classes (`bg-white`, `text-gray-900`) and will not adapt. Treat this as an open gap, not an intentional constraint, when touching these components.
+- Known inconsistencies worth knowing about before extending: some header buttons bypass the shared `Button` component with slightly different type styles (`font-bold text-[13.5px]` vs. the component's `font-medium text-sm`); input error borders use the `danger-*` token but error text uses Tailwind's native `text-red-600` instead of `text-danger-600`.
+
 ## Documentation map
 
 - `REQUIREMENTS.md` — user stories and acceptance criteria.
