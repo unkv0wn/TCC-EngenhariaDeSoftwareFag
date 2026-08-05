@@ -1,0 +1,2 @@
+-- Baseline migration. Establishes the Flyway-managed schema history for
+-- routewise-backend; the first real entity's DDL lands in V2.

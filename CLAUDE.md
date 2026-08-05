@@ -8,7 +8,7 @@ RouteWise — a TCC (Trabalho de Conclusão de Curso) project: a stateless urban
 
 The repo contains **three independently-versioned pieces** — know which one you're in before editing:
 
-- `backend/` — Java 21 + Spring Boot 3.2.5. Stateless, no database, no auth. The functional core.
+- `backend/` — Java 21 + Spring Boot 3.2.5. No auth. The functional core. Persists to PostgreSQL (Spring Data JPA + Flyway) as of the `feat-connect-database` work — see "Database" below; the request pipeline itself (`RouteController` and everything under it) remains stateless.
 - `FrontEnd-Next/` — Next.js 16 + React 19 + Tailwind 4. **This is the production frontend** — everything shipped ends up here. Adds auth (login) and a dashboard the original app never had. **Not wired to the backend yet** — `services/auth.ts` and vehicle data are mocked. Do not assume backend endpoints exist for login/dashboard/vehicles unless you've checked `backend/src/main/java/com/routewise/controller/` first.
 - `frontend/` — React 18 + Vite + Leaflet. A test-only prototype used to validate the routing core end-to-end against the backend. **Does not ship to production.** Treat as frozen/reference; don't build new features here.
 
@@ -17,6 +17,7 @@ The repo contains **three independently-versioned pieces** — know which one yo
 ### Backend (`backend/`)
 
 ```bash
+docker compose -f backend/docker-compose.yml up -d   # start local Postgres (:5434), needed before the two below
 mvn clean install                 # compile + run all tests
 mvn spring-boot:run               # run on :8080
 mvn test                          # run tests only
@@ -78,6 +79,14 @@ A separate, standalone family of experiment/analysis classes (cost-weight sensit
 
 `useWaypoints` manages map state; `routeApi.ts` posts to `/api/routes/compute`; `useSseListener` opens the `EventSource` against `/api/routes/events/{requestId}` and drives UI state through the `PROCESSING`/`COMPLETED`/`ERROR` events.
 
+### Database (`backend/`)
+
+PostgreSQL, via Spring Data JPA + Flyway. `backend/docker-compose.yml` runs a local Postgres 16 on host port **5434** (dev credentials `routewise`/`routewise`, db `routewise`) — start it before `mvn spring-boot:run`. Connection settings in `application.properties` read from `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` env vars, defaulting to that local compose setup.
+
+Flyway owns the schema — migrations live in `backend/src/main/resources/db/migration/` (`V1__init.sql` is the baseline, currently empty). `spring.jpa.hibernate.ddl-auto=validate`: Hibernate checks entities against the schema but never generates DDL itself; every schema change goes through a new Flyway migration file.
+
+No entities/repositories exist yet — this is connection infrastructure only, added ahead of the first Cadastro (Vehicles, per `TODO.md`). Context-loading Spring tests (`@SpringBootTest`) will need a running Postgres (or Testcontainers, not yet wired in) once they're introduced.
+
 ## Coding conventions
 
 These are enforced project-wide:
@@ -86,7 +95,7 @@ These are enforced project-wide:
 - TypeScript interfaces prefixed `I` (`IOsrmClient`-style pattern also used in Java), types prefixed `T` (`TWaypoint`, `TRouteEvent`).
 - Strict equality only (`===`/`!==`); no TypeScript `any`.
 - Java: typed `catch` blocks (no bare exception swallowing), SLF4J/Logback for logging — never `System.out.println`.
-- No database, no auth on the `backend`/`frontend` pair by design — don't add persistence or session state there without an explicit decision to unfreeze that constraint.
+- No auth on the `backend`/`frontend` pair by design — don't add session state there without an explicit decision to unfreeze that constraint. Persistence (PostgreSQL) was unfrozen for `backend` — see "Database" below; `frontend` stays stateless.
 - `frontend/` is a frozen test prototype — don't add new features to it; new UI work goes in `FrontEnd-Next/`.
 - **Language:** code is always in English — variable/function/class names, file names, comments, commit messages. Only user-facing text (UI labels, button text, error messages shown in the UI) is PT-BR.
 
