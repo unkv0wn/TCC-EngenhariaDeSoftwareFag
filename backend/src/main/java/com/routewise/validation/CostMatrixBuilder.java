@@ -8,6 +8,7 @@ package com.routewise.validation;
  * {@code docs/superpowers/specs/2026-07-29-empirical-cost-validation-design.md}:
  * <pre>
  *   durationSec      = distanceKm / roadType.avgSpeedKmh * 3600
+ *   loadFactor        = min(max(cargoWeightKg / capacityKg, cargoVolumeM3 / capacityM3), 1) — see {@link CargoOccupancy}
  *   consumoAjustado   = baseFuelConsumptionLPer100Km * (1 + 0.30 * loadFactor) * roadType.fuelMultiplier
  *   fuelLiters        = distanceKm * consumoAjustado / 100
  *   tireWearFraction  = (1 / tireLifeKm) * axleCount * (1 + 0.5 * loadFactor) * roadType.wearMultiplier
@@ -16,6 +17,11 @@ package com.routewise.validation;
  *   costB             = timeCostReais + (fuelLiters * fuelPricePerLiter) + tireWearReais
  *   costA             = durationSec
  * </pre>
+ *
+ * <p>{@code loadFactor} is whichever of weight or volume occupancy is more restrictive
+ * for this vehicle, clamped to {@code [0, 1]} since the formulas above are only
+ * calibrated for that range — see {@link CargoOccupancy} for the uncapped fractions
+ * and feasibility check.
  */
 public final class CostMatrixBuilder {
 
@@ -26,6 +32,8 @@ public final class CostMatrixBuilder {
 
   public static EdgeCosts build(Scenario scenario, VehicleProfile profile) {
     int n = scenario.size();
+    double loadFactor = CargoOccupancy.compute(scenario.cargoWeightKg(), scenario.cargoVolumeM3(), profile)
+      .effectiveLoadFactor();
 
     double[][] durationSec = new double[n][n];
     double[][] fuelLiters = new double[n][n];
@@ -45,13 +53,13 @@ public final class CostMatrixBuilder {
         double duration = distanceKm / roadType.avgSpeedKmh * 3600.0;
 
         double consumoAjustado = profile.baseFuelConsumptionLPer100Km()
-          * (1 + LOAD_FUEL_FACTOR * scenario.loadFactor())
+          * (1 + LOAD_FUEL_FACTOR * loadFactor)
           * roadType.fuelMultiplier;
         double fuel = distanceKm * consumoAjustado / 100.0;
 
         double tireWearFraction = (1.0 / profile.tireLifeKm())
           * profile.axleCount()
-          * (1 + LOAD_WEAR_FACTOR * scenario.loadFactor())
+          * (1 + LOAD_WEAR_FACTOR * loadFactor)
           * roadType.wearMultiplier;
         double tireWear = distanceKm * tireWearFraction * profile.tireReplacementCostPerTire();
 

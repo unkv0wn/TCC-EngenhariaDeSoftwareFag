@@ -76,11 +76,15 @@ public final class ComparisonReportWriter {
     sb.append("## 4. Detalhamento por trecho — Cenário A\n\n").append(edgeTable(scenario, costs, orderA)).append('\n');
     sb.append("## 5. Detalhamento por trecho — Cenário B\n\n").append(edgeTable(scenario, costs, orderB)).append('\n');
 
+    CargoOccupancy occupancy = CargoOccupancy.compute(scenario.cargoWeightKg(), scenario.cargoVolumeM3(), profile);
     sb.append("## 6. Perfil de veículo usado\n\n");
     sb.append(String.format(Locale.US,
-      "Eixos: %d · Capacidade: %.0f kg · Carga neste cenário: %.0f%% · Consumo base: %.1f L/100km · " +
-      "Preço do litro: R$ %.2f · Custo do pneu: R$ %.2f · Vida útil do pneu: %.0f km · Custo-hora: R$ %.2f\n",
-      profile.axleCount(), profile.capacityKg(), scenario.loadFactor() * 100,
+      "Eixos: %d · Capacidade: %.0f kg / %.1f m³ · Carga neste cenário: %.0f kg (%.0f%% peso), %.1f m³ (%.0f%% volume) · " +
+      "Consumo base: %.1f L/100km · Preço do litro: R$ %.2f · Custo do pneu: R$ %.2f · Vida útil do pneu: %.0f km · " +
+      "Custo-hora: R$ %.2f\n",
+      profile.axleCount(), profile.capacityKg(), profile.capacityM3(),
+      scenario.cargoWeightKg(), occupancy.weightFraction() * 100,
+      scenario.cargoVolumeM3(), occupancy.volumeFraction() * 100,
       profile.baseFuelConsumptionLPer100Km(), profile.fuelPricePerLiter(),
       profile.tireReplacementCostPerTire(), profile.tireLifeKm(), profile.driverCostPerHourReais()
     ));

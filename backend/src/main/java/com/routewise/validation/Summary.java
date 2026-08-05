@@ -6,6 +6,8 @@ import java.util.List;
 public record Summary(
   int totalTrials,
   double pctRoutesDiffer,
+  double pctInfeasible,
+  double pctVolumeBound,
   double gapReaisMean,
   double gapReaisMedian,
   double gapReaisStd,
@@ -18,9 +20,11 @@ public record Summary(
   double gapPercentMax,
   double wilcoxonStatistic,
   double wilcoxonPValue,
-  double corrLoadFactor,
+  double corrWeightFraction,
+  double corrVolumeFraction,
+  double corrOccupancyFraction,
   double corrUrbanFraction,
   double corrWaypointCount,
   List<WaypointCountBucket> byWaypointCount,
-  List<LoadLevelBucket> byLoadLevel
+  List<OccupancyLevelBucket> byOccupancyLevel
 ) {}

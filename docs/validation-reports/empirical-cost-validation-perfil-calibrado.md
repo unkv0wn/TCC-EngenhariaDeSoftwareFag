@@ -1,6 +1,6 @@
-# Validação Empírica do Custo de Rota — Relatório (Perfil: Médio (3 eixos))
+# Validação Empírica do Custo de Rota — Relatório (Perfil: Médio (3 eixos) (calibrado: combustível + pneu empíricos))
 
-Gerado em: 2026-07-30 22:21:12
+Gerado em: 2026-08-01 13:19:41
 Trials: 500
 
 ## 1. Metodologia e suposições
@@ -17,10 +17,10 @@ Perfil de veículo assumido (constante, fixo para todos os trials):
 | Eixos | 3 |
 | Capacidade (peso) | 4000 kg |
 | Capacidade (volume) | 25.0 m³ |
-| Consumo base | 15.0 L/100km |
+| Consumo base | 18.4 L/100km |
 | Preço do litro | R$ 6.10 |
 | Custo de reposição do pneu | R$ 1800.00 |
-| Vida útil do pneu | 60000 km |
+| Vida útil do pneu | 44000 km |
 | Custo-hora do motorista | R$ 35.00 |
 
 A carga de cada trial é sorteada em kg e m³ de forma independente da capacidade
@@ -41,14 +41,14 @@ fosse proporcional só à distância, as duas rotas seriam sempre idênticas).
 
 | Métrica | Valor |
 |---|---|
-| Rotas que mudaram entre Cenário A e B | 29.4% |
+| Rotas que mudaram entre Cenário A e B | 31.4% |
 | Cargas inviáveis (peso ou volume > 100% da capacidade) | 20.2% |
 | Trials em que o volume (cubagem), não o peso, foi a restrição | 46.6% |
-| Gap de custo — média | R$ 3.69 (0.96%) |
+| Gap de custo — média | R$ 5.06 (1.13%) |
 | Gap de custo — mediana | R$ 0.00 (0.00%) |
-| Gap de custo — desvio padrão | R$ 8.46 (2.06 pp) |
+| Gap de custo — desvio padrão | R$ 10.98 (2.30 pp) |
 | Gap de custo — mínimo | R$ 0.00 (0.00%) |
-| Gap de custo — máximo | R$ 65.03 (12.29%) |
+| Gap de custo — máximo | R$ 81.75 (13.40%) |
 
 "Gap" = quanto a operação deixa de economizar, em R$, seguindo a rota do Cenário A
 em vez da rota do Cenário B — sempre ≥ 0, pois a rota do Cenário B é ótima por
@@ -66,7 +66,7 @@ excluindo pares com diferença zero, aproximação normal para amostra grande):
 
 | | |
 |---|---|
-| Estatística (W) | 10731.00 |
+| Estatística (W) | 12403.00 |
 | p-valor | 0.0000 |
 
 p < 0.05 — a diferença entre as duas funções de custo é estatisticamente significativa, não apenas ruído amostral.
@@ -75,42 +75,42 @@ p < 0.05 — a diferença entre as duas funções de custo é estatisticamente s
 
 | Variável | Correlação |
 |---|---|
-| Fração de peso ocupada (peso carga / capacidade kg) | -0.057 |
-| Fração de volume ocupada (volume carga / capacidade m³) | -0.099 |
-| Ocupação efetiva (a mais restritiva das duas acima) | -0.099 |
+| Fração de peso ocupada (peso carga / capacidade kg) | -0.059 |
+| Fração de volume ocupada (volume carga / capacidade m³) | -0.096 |
+| Ocupação efetiva (a mais restritiva das duas acima) | -0.100 |
 | Fração de trechos urbanos na rota | 0.182 |
-| Número de waypoints | 0.439 |
+| Número de waypoints | 0.443 |
 
 ### 4.1 Detalhamento por número de waypoints
 
 | Waypoints (n) | Trials | Rotas diferentes | Gap médio (%) |
 |---|---|---|---|
 | 2 | 54 | 0.0% | 0.00% |
-| 3 | 50 | 4.0% | 0.02% |
-| 4 | 65 | 9.2% | 0.30% |
-| 5 | 63 | 15.9% | 0.41% |
-| 6 | 48 | 39.6% | 1.33% |
-| 7 | 66 | 48.5% | 1.86% |
-| 8 | 37 | 51.4% | 1.38% |
-| 9 | 50 | 44.0% | 1.35% |
-| 10 | 67 | 55.2% | 1.94% |
+| 3 | 50 | 2.0% | 0.02% |
+| 4 | 65 | 10.8% | 0.36% |
+| 5 | 63 | 20.6% | 0.51% |
+| 6 | 48 | 41.7% | 1.56% |
+| 7 | 66 | 53.0% | 2.18% |
+| 8 | 37 | 56.8% | 1.68% |
+| 9 | 50 | 46.0% | 1.58% |
+| 10 | 67 | 55.2% | 2.25% |
 
 
 ### 4.2 Detalhamento por nível de ocupação do veículo (peso ou volume, o que for maior)
 
 | Ocupação (% da capacidade) | Trials | Rotas diferentes | Gap médio (%) |
 |---|---|---|---|
-| 0–25% | 15 | 26.7% | 1.37% |
-| 25–50% | 83 | 37.3% | 1.26% |
-| 50–75% | 129 | 33.3% | 1.06% |
-| 75–100% | 172 | 25.6% | 0.83% |
-| > 100% (inviável) | 101 | 24.8% | 0.76% |
+| 0–25% | 15 | 26.7% | 1.49% |
+| 25–50% | 83 | 38.6% | 1.42% |
+| 50–75% | 129 | 35.7% | 1.28% |
+| 75–100% | 172 | 27.9% | 0.98% |
+| > 100% (inviável) | 101 | 26.7% | 0.92% |
 
 
 ## 5. Conclusão
 
 1. **Correlação com o custo:** pelo menos um indicador (ver seção 4) tem correlação não-desprezível com o tamanho do gap.
-2. **Muda a rota escolhida?** sim, em 29.4% dos trials a ordem ótima mudou entre os dois cenários.
+2. **Muda a rota escolhida?** sim, em 31.4% dos trials a ordem ótima mudou entre os dois cenários.
 3. **É estatisticamente relevante?** sim — ver teste de Wilcoxon na seção 3.
 4. **Quais indicadores importam mais?** ver as magnitudes de correlação na seção 4 — o de maior valor absoluto é o que mais explica a variação do gap.
 5. **Capacidade é respeitada?** não — o algoritmo não valida capacidade hoje; 20.2% das cargas sorteadas excederam o peso e/ou o volume máximo deste veículo e ainda assim foram roteadas normalmente.

@@ -44,7 +44,7 @@ public final class EmpiricalCostValidationExperiment {
       List<Integer> orderA = optimizer.optimize(costs.costA(), MODE);
       List<Integer> orderB = optimizer.optimize(costs.costB(), MODE);
 
-      results.add(TrialResultBuilder.build(scenario, costs, orderA, orderB));
+      results.add(TrialResultBuilder.build(scenario, profile, costs, orderA, orderB));
     }
 
     Summary summary = StatisticalAnalyzer.analyze(results);

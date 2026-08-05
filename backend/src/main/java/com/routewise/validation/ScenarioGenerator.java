@@ -22,6 +22,15 @@ public final class ScenarioGenerator {
   private static final int MIN_WAYPOINTS = 2;
   private static final int MAX_WAYPOINTS = 10;
 
+  // Raw cargo ranges, independent of any one vehicle profile — deliberately sized to
+  // straddle the light/medium/heavy VehicleProfile capacities (light: 1500kg/8m3,
+  // medium: 4000kg/25m3, heavy: 12000kg/90m3), so a fixed set of scenarios produces
+  // meaningful, varied occupancy — including some infeasible loads — across all three.
+  private static final double MIN_CARGO_WEIGHT_KG = 50.0;
+  private static final double MAX_CARGO_WEIGHT_KG = 4_500.0;
+  private static final double MIN_CARGO_VOLUME_M3 = 0.3;
+  private static final double MAX_CARGO_VOLUME_M3 = 28.0;
+
   private final Random rng;
 
   public ScenarioGenerator(Random rng) {
@@ -66,8 +75,9 @@ public final class ScenarioGenerator {
       }
     }
 
-    double loadFactor = rng.nextDouble();
+    double cargoWeightKg = MIN_CARGO_WEIGHT_KG + rng.nextDouble() * (MAX_CARGO_WEIGHT_KG - MIN_CARGO_WEIGHT_KG);
+    double cargoVolumeM3 = MIN_CARGO_VOLUME_M3 + rng.nextDouble() * (MAX_CARGO_VOLUME_M3 - MIN_CARGO_VOLUME_M3);
 
-    return new Scenario(waypoints, distanceKm, roadType, loadFactor);
+    return new Scenario(waypoints, distanceKm, roadType, cargoWeightKg, cargoVolumeM3);
   }
 }

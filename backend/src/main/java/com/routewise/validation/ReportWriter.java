@@ -45,12 +45,22 @@ public final class ReportWriter {
       | Parâmetro | Valor |
       |---|---|
       | Eixos | %d |
-      | Capacidade | %.0f kg |
+      | Capacidade (peso) | %.0f kg |
+      | Capacidade (volume) | %.1f m³ |
       | Consumo base | %.1f L/100km |
       | Preço do litro | R$ %.2f |
       | Custo de reposição do pneu | R$ %.2f |
       | Vida útil do pneu | %.0f km |
       | Custo-hora do motorista | R$ %.2f |
+
+      A carga de cada trial é sorteada em kg e m³ de forma independente da capacidade
+      do veículo (mesma faixa bruta reaproveitada entre perfis, para comparação justa —
+      ver `ScenarioGenerator`). A ocupação efetiva usada nas fórmulas de consumo e
+      desgaste é `min(max(peso/capacidadeKg, volume/capacidadeM3), 1)` — ou seja, a
+      dimensão mais restritiva (peso OU cubagem) é que manda, como na prática real de
+      frete. Cargas cuja ocupação bruta excede 100%% em qualquer dimensão são marcadas
+      como inviáveis (ver seção 2) — hoje o algoritmo de roteamento não rejeita nem
+      sinaliza esse caso, ele só é detectado por este experimento.
 
       Cada trecho sintético recebe um tipo de via (RODOVIA/ARTERIAL/URBANA) sorteado
       independentemente por par ordenado, com velocidade e multiplicadores de
@@ -62,6 +72,8 @@ public final class ReportWriter {
       | Métrica | Valor |
       |---|---|
       | Rotas que mudaram entre Cenário A e B | %.1f%% |
+      | Cargas inviáveis (peso ou volume > 100%% da capacidade) | %.1f%% |
+      | Trials em que o volume (cubagem), não o peso, foi a restrição | %.1f%% |
       | Gap de custo — média | R$ %.2f (%.2f%%) |
       | Gap de custo — mediana | R$ %.2f (%.2f%%) |
       | Gap de custo — desvio padrão | R$ %.2f (%.2f pp) |
@@ -71,6 +83,11 @@ public final class ReportWriter {
       "Gap" = quanto a operação deixa de economizar, em R$, seguindo a rota do Cenário A
       em vez da rota do Cenário B — sempre ≥ 0, pois a rota do Cenário B é ótima por
       construção sob o próprio custo do Cenário B.
+
+      "Cargas inviáveis" não são excluídas dos trials — elas continuam sendo roteadas
+      normalmente (o `AStarWaypointOptimizer` não sabe nada sobre capacidade), o que é
+      exatamente o ponto: hoje não existe nenhuma validação de capacidade na pipeline de
+      produção, então esse percentual mede a exposição real a esse gap de funcionalidade.
 
       ## 3. Teste estatístico
 
@@ -88,7 +105,9 @@ public final class ReportWriter {
 
       | Variável | Correlação |
       |---|---|
-      | Fator de carga do veículo | %.3f |
+      | Fração de peso ocupada (peso carga / capacidade kg) | %.3f |
+      | Fração de volume ocupada (volume carga / capacidade m³) | %.3f |
+      | Ocupação efetiva (a mais restritiva das duas acima) | %.3f |
       | Fração de trechos urbanos na rota | %.3f |
       | Número de waypoints | %.3f |
 
@@ -96,7 +115,7 @@ public final class ReportWriter {
 
       %s
 
-      ### 4.2 Detalhamento por nível de carga do veículo
+      ### 4.2 Detalhamento por nível de ocupação do veículo (peso ou volume, o que for maior)
 
       %s
 
@@ -105,10 +124,10 @@ public final class ReportWriter {
       %s
       """,
       profile.label(), generatedAt, s.totalTrials(),
-      profile.axleCount(), profile.capacityKg(), profile.baseFuelConsumptionLPer100Km(),
+      profile.axleCount(), profile.capacityKg(), profile.capacityM3(), profile.baseFuelConsumptionLPer100Km(),
       profile.fuelPricePerLiter(), profile.tireReplacementCostPerTire(), profile.tireLifeKm(),
       profile.driverCostPerHourReais(),
-      s.pctRoutesDiffer(),
+      s.pctRoutesDiffer(), s.pctInfeasible(), s.pctVolumeBound(),
       s.gapReaisMean(), s.gapPercentMean(),
       s.gapReaisMedian(), s.gapPercentMedian(),
       s.gapReaisStd(), s.gapPercentStd(),
@@ -116,9 +135,10 @@ public final class ReportWriter {
       s.gapReaisMax(), s.gapPercentMax(),
       formatStat(s.wilcoxonStatistic()), formatPValue(s.wilcoxonPValue()),
       interpretWilcoxon(s.wilcoxonPValue()),
-      s.corrLoadFactor(), s.corrUrbanFraction(), s.corrWaypointCount(),
+      s.corrWeightFraction(), s.corrVolumeFraction(), s.corrOccupancyFraction(),
+      s.corrUrbanFraction(), s.corrWaypointCount(),
       buildWaypointCountTable(s.byWaypointCount()),
-      buildLoadLevelTable(s.byLoadLevel()),
+      buildOccupancyLevelTable(s.byOccupancyLevel()),
       buildConclusion(s)
     );
   }
@@ -134,11 +154,11 @@ public final class ReportWriter {
     return sb.toString();
   }
 
-  private static String buildLoadLevelTable(java.util.List<LoadLevelBucket> buckets) {
+  private static String buildOccupancyLevelTable(java.util.List<OccupancyLevelBucket> buckets) {
     StringBuilder sb = new StringBuilder();
-    sb.append("| Carga (% da capacidade) | Trials | Rotas diferentes | Gap médio (%) |\n");
+    sb.append("| Ocupação (% da capacidade) | Trials | Rotas diferentes | Gap médio (%) |\n");
     sb.append("|---|---|---|---|\n");
-    for (LoadLevelBucket b : buckets) {
+    for (OccupancyLevelBucket b : buckets) {
       sb.append(String.format(Locale.US, "| %s | %d | %.1f%% | %.2f%% |\n",
         b.label(), b.trialCount(), b.pctRoutesDiffer(), b.gapPercentMean()));
     }
@@ -166,7 +186,7 @@ public final class ReportWriter {
     StringBuilder sb = new StringBuilder();
 
     sb.append("1. **Correlação com o custo:** ");
-    double maxAbsCorr = Math.max(Math.abs(s.corrLoadFactor()),
+    double maxAbsCorr = Math.max(Math.abs(s.corrOccupancyFraction()),
       Math.max(Math.abs(s.corrUrbanFraction()), Math.abs(s.corrWaypointCount())));
     if (maxAbsCorr >= 0.3) {
       sb.append("pelo menos um indicador (ver seção 4) tem correlação não-desprezível com o tamanho do gap.\n");
@@ -186,6 +206,11 @@ public final class ReportWriter {
 
     sb.append("4. **Quais indicadores importam mais?** ");
     sb.append("ver as magnitudes de correlação na seção 4 — o de maior valor absoluto é o que mais explica a variação do gap.\n");
+
+    sb.append("5. **Capacidade é respeitada?** ");
+    sb.append(String.format(Locale.US,
+      "não — o algoritmo não valida capacidade hoje; %.1f%% das cargas sorteadas excederam o peso e/ou o " +
+      "volume máximo deste veículo e ainda assim foram roteadas normalmente.\n", s.pctInfeasible()));
 
     return sb.toString();
   }

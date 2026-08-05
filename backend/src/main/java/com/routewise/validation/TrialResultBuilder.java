@@ -11,7 +11,7 @@ public final class TrialResultBuilder {
   private TrialResultBuilder() {}
 
   public static TrialResult build(
-    Scenario scenario, EdgeCosts costs, List<Integer> orderA, List<Integer> orderB
+    Scenario scenario, VehicleProfile profile, EdgeCosts costs, List<Integer> orderA, List<Integer> orderB
   ) {
     boolean routesDiffer = !orderA.equals(orderB);
 
@@ -26,10 +26,17 @@ public final class TrialResultBuilder {
     double tireWearReaisOrderB = sumAlongPath(costs.tireWearReais(), orderB);
     double urbanFraction = urbanFraction(scenario, orderB);
 
+    CargoOccupancy occupancy = CargoOccupancy.compute(scenario.cargoWeightKg(), scenario.cargoVolumeM3(), profile);
+    double occupancyFraction = Math.max(occupancy.weightFraction(), occupancy.volumeFraction());
+
     return new TrialResult(
       scenario.size(), routesDiffer, costBUnderOrderA, costBUnderOrderB,
       gapReais, gapPercent, distanceKmOrderB, durationMinOrderB,
-      fuelLitersOrderB, tireWearReaisOrderB, scenario.loadFactor(), urbanFraction
+      fuelLitersOrderB, tireWearReaisOrderB,
+      scenario.cargoWeightKg(), scenario.cargoVolumeM3(),
+      occupancy.weightFraction(), occupancy.volumeFraction(), occupancyFraction,
+      occupancy.volumeBound(), occupancy.feasible(),
+      urbanFraction
     );
   }
 

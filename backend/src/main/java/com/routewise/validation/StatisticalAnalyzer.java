@@ -25,6 +25,11 @@ public final class StatisticalAnalyzer {
     long differCount = results.stream().filter(TrialResult::routesDiffer).count();
     double pctRoutesDiffer = 100.0 * differCount / total;
 
+    long infeasibleCount = results.stream().filter(r -> !r.feasible()).count();
+    double pctInfeasible = 100.0 * infeasibleCount / total;
+    long volumeBoundCount = results.stream().filter(TrialResult::volumeBound).count();
+    double pctVolumeBound = 100.0 * volumeBoundCount / total;
+
     DescriptiveStatistics gapReais = new DescriptiveStatistics();
     DescriptiveStatistics gapPercent = new DescriptiveStatistics();
     for (TrialResult r : results) {
@@ -42,17 +47,21 @@ public final class StatisticalAnalyzer {
     double[] wilcoxon = runWilcoxon(costBUnderOrderA, costBUnderOrderB);
 
     double[] gapPercentArr = results.stream().mapToDouble(TrialResult::gapPercent).toArray();
-    double[] loadFactorArr = results.stream().mapToDouble(TrialResult::loadFactor).toArray();
+    double[] weightFractionArr = results.stream().mapToDouble(TrialResult::weightFraction).toArray();
+    double[] volumeFractionArr = results.stream().mapToDouble(TrialResult::volumeFraction).toArray();
+    double[] occupancyFractionArr = results.stream().mapToDouble(TrialResult::occupancyFraction).toArray();
     double[] urbanFractionArr = results.stream().mapToDouble(TrialResult::urbanFraction).toArray();
     double[] nArr = results.stream().mapToDouble(TrialResult::n).toArray();
 
     SpearmansCorrelation correlation = new SpearmansCorrelation();
     List<WaypointCountBucket> byWaypointCount = buildWaypointCountBreakdown(results);
-    List<LoadLevelBucket> byLoadLevel = buildLoadLevelBreakdown(results);
+    List<OccupancyLevelBucket> byOccupancyLevel = buildOccupancyLevelBreakdown(results);
 
     return new Summary(
       total,
       pctRoutesDiffer,
+      pctInfeasible,
+      pctVolumeBound,
       gapReais.getMean(),
       gapReais.getPercentile(50),
       gapReais.getStandardDeviation(),
@@ -65,11 +74,13 @@ public final class StatisticalAnalyzer {
       gapPercent.getMax(),
       wilcoxon[0],
       wilcoxon[1],
-      correlation.correlation(gapPercentArr, loadFactorArr),
+      correlation.correlation(gapPercentArr, weightFractionArr),
+      correlation.correlation(gapPercentArr, volumeFractionArr),
+      correlation.correlation(gapPercentArr, occupancyFractionArr),
       correlation.correlation(gapPercentArr, urbanFractionArr),
       correlation.correlation(gapPercentArr, nArr),
       byWaypointCount,
-      byLoadLevel
+      byOccupancyLevel
     );
   }
 
@@ -90,18 +101,24 @@ public final class StatisticalAnalyzer {
     return buckets;
   }
 
-  private static final double[] LOAD_LEVEL_UPPER_BOUNDS = {0.25, 0.50, 0.75, 1.01};
-  private static final String[] LOAD_LEVEL_LABELS = {"0–25%", "25–50%", "50–75%", "75–100%"};
+  private static final double[] OCCUPANCY_LEVEL_UPPER_BOUNDS = {0.25, 0.50, 0.75, 1.00, Double.MAX_VALUE};
+  private static final String[] OCCUPANCY_LEVEL_LABELS =
+    {"0–25%", "25–50%", "50–75%", "75–100%", "> 100% (inviável)"};
 
-  /** Groups trials by vehicle load (% of capacity) so the report can show how the gap trends with cargo weight. */
-  private static List<LoadLevelBucket> buildLoadLevelBreakdown(List<TrialResult> results) {
-    List<LoadLevelBucket> buckets = new ArrayList<>();
-    for (int b = 0; b < LOAD_LEVEL_LABELS.length; b++) {
-      double lower = b == 0 ? -0.01 : LOAD_LEVEL_UPPER_BOUNDS[b - 1];
-      double upper = LOAD_LEVEL_UPPER_BOUNDS[b];
+  /**
+   * Groups trials by cargo occupancy (% of capacity, whichever of weight/volume is more
+   * restrictive — see {@link CargoOccupancy}) so the report can show how the gap trends
+   * with cargo load, including the over-capacity ("> 100%") bucket the algorithm
+   * currently has no way to flag as infeasible on its own.
+   */
+  private static List<OccupancyLevelBucket> buildOccupancyLevelBreakdown(List<TrialResult> results) {
+    List<OccupancyLevelBucket> buckets = new ArrayList<>();
+    for (int b = 0; b < OCCUPANCY_LEVEL_LABELS.length; b++) {
+      double lower = b == 0 ? -0.01 : OCCUPANCY_LEVEL_UPPER_BOUNDS[b - 1];
+      double upper = OCCUPANCY_LEVEL_UPPER_BOUNDS[b];
 
       List<TrialResult> group = results.stream()
-        .filter(r -> r.loadFactor() > lower && r.loadFactor() <= upper)
+        .filter(r -> r.occupancyFraction() > lower && r.occupancyFraction() <= upper)
         .collect(Collectors.toList());
 
       if (group.isEmpty()) {
@@ -111,7 +128,7 @@ public final class StatisticalAnalyzer {
       long differCount = group.stream().filter(TrialResult::routesDiffer).count();
       double pctDiffer = 100.0 * differCount / group.size();
       double gapMean = group.stream().mapToDouble(TrialResult::gapPercent).average().orElse(0.0);
-      buckets.add(new LoadLevelBucket(LOAD_LEVEL_LABELS[b], group.size(), pctDiffer, gapMean));
+      buckets.add(new OccupancyLevelBucket(OCCUPANCY_LEVEL_LABELS[b], group.size(), pctDiffer, gapMean));
     }
     return buckets;
   }

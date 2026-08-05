@@ -53,7 +53,7 @@ public final class EmpiricalCostValidationByVehicle {
         EdgeCosts costs = CostMatrixBuilder.build(scenario, profile);
         List<Integer> orderA = optimizer.optimize(costs.costA(), MODE);
         List<Integer> orderB = optimizer.optimize(costs.costB(), MODE);
-        results.add(TrialResultBuilder.build(scenario, costs, orderA, orderB));
+        results.add(TrialResultBuilder.build(scenario, profile, costs, orderA, orderB));
       }
       summaries.add(StatisticalAnalyzer.analyze(results));
     }
