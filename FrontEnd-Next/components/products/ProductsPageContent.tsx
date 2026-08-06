@@ -13,11 +13,13 @@ import { ProductFormModal } from "@/components/products/ProductFormModal";
 import { ProductGrid } from "@/components/products/ProductGrid";
 import { ProductTable } from "@/components/products/ProductTable";
 import { useProducts, type Product } from "@/hooks/useProducts";
+import { useUnits } from "@/hooks/useUnits";
 import { useToast } from "@/hooks/useToast";
 import type { ProductFormData } from "@/lib/validations/product";
 
 export function ProductsPageContent() {
   const { products, createProduct, updateProduct, deleteProduct } = useProducts();
+  const { units } = useUnits();
   const { success, error } = useToast();
   const [view, setView] = useState<ListView>("cards");
   const [search, setSearch] = useState("");
@@ -93,13 +95,25 @@ export function ProductsPageContent() {
             }
           />
         ) : view === "cards" ? (
-          <ProductGrid products={filteredProducts} onEdit={openEditForm} onDelete={setProductToDelete} />
+          <ProductGrid
+            products={filteredProducts}
+            units={units}
+            onEdit={openEditForm}
+            onDelete={setProductToDelete}
+          />
         ) : (
-          <ProductTable products={filteredProducts} onEdit={openEditForm} onDelete={setProductToDelete} />
+          <ProductTable
+            products={filteredProducts}
+            units={units}
+            onEdit={openEditForm}
+            onDelete={setProductToDelete}
+          />
         )}
       </main>
 
-      {isFormOpen && <ProductFormModal product={formProduct} onClose={closeForm} onSubmit={handleSubmit} />}
+      {isFormOpen && (
+        <ProductFormModal product={formProduct} units={units} onClose={closeForm} onSubmit={handleSubmit} />
+      )}
 
       {productToDelete && (
         <ConfirmDialog

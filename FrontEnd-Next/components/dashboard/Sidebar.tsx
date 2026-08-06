@@ -11,6 +11,7 @@ import {
   LogOut,
   Package,
   Route as RouteIcon,
+  Ruler,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ const NAV_GROUPS = [
     label: "Cadastros",
     items: [
       { href: "/dashboard/veiculos", label: "Veículos", icon: Car },
+      { href: "/dashboard/unidades", label: "Unidades de Medida", icon: Ruler },
       { href: "/dashboard/produtos", label: "Produtos", icon: Package },
     ],
   },

@@ -2,26 +2,19 @@
 
 import { Pencil, Trash2 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { formatCurrency, formatWeight } from "@/lib/format";
 import type { Product } from "@/hooks/useProducts";
-import { PRODUCT_UNITS, type ProductUnit } from "@/lib/validations/product";
-
-const UNIT_BADGE_STYLES: Record<ProductUnit, string> = {
-  un: "bg-secondary-50 text-secondary-700",
-  kg: "bg-success-50 text-success-700",
-  cx: "bg-warning-50 text-warning-700",
-  l: "bg-danger-50 text-danger-700",
-};
+import type { Unit } from "@/hooks/useUnits";
 
 interface ProductCardProps {
   product: Product;
+  units: Unit[];
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
 }
 
-export function ProductCard({ product, onEdit, onDelete }: ProductCardProps) {
-  const unitLabel = PRODUCT_UNITS.find((option) => option.value === product.unit)?.label;
+export function ProductCard({ product, units, onEdit, onDelete }: ProductCardProps) {
+  const unit = units.find((option) => option.id === product.unit);
 
   return (
     <div className="group relative flex flex-col gap-2.5 rounded-xl border border-gray-200 bg-white p-3.5 transition-shadow hover:shadow-md">
@@ -49,8 +42,8 @@ export function ProductCard({ product, onEdit, onDelete }: ProductCardProps) {
           <span className="rounded-md bg-primary-50 px-2 py-0.5 text-[11px] font-extrabold tracking-wide text-primary-700">
             {product.sku}
           </span>
-          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold", UNIT_BADGE_STYLES[product.unit])}>
-            {unitLabel}
+          <span className="rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-bold text-warning-700">
+            {unit && `${unit.name} (${unit.code})`}
           </span>
         </div>
         <div>

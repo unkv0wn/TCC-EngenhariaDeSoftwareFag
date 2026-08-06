@@ -10,7 +10,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import type { Product } from "@/hooks/useProducts";
-import { PRODUCT_UNITS, productSchema, type ProductFormData } from "@/lib/validations/product";
+import type { Unit } from "@/hooks/useUnits";
+import { productSchema, type ProductFormData } from "@/lib/validations/product";
 
 const EMPTY_VALUES: Partial<ProductFormData> = {
   sku: "",
@@ -20,11 +21,12 @@ const EMPTY_VALUES: Partial<ProductFormData> = {
 
 interface ProductFormModalProps {
   product: Product | null;
+  units: Unit[];
   onClose: () => void;
   onSubmit: (data: ProductFormData) => void;
 }
 
-export function ProductFormModal({ product, onClose, onSubmit }: ProductFormModalProps) {
+export function ProductFormModal({ product, units, onClose, onSubmit }: ProductFormModalProps) {
   const isEditing = product !== null;
 
   const {
@@ -49,7 +51,7 @@ export function ProductFormModal({ product, onClose, onSubmit }: ProductFormModa
           <Select
             label="Unidade"
             placeholder="Selecione..."
-            options={PRODUCT_UNITS}
+            options={units.map((unit) => ({ value: unit.id, label: `${unit.name} (${unit.code})` }))}
             error={errors.unit?.message}
             {...register("unit")}
           />
