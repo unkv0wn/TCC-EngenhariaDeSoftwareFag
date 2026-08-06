@@ -1,6 +1,6 @@
 # Combustível + Pneu Empíricos, Combinados — vs. Estado Atual do Projeto
 
-Gerado em: 2026-08-01 13:08:31
+Gerado em: 2026-08-05 00:59:22
 
 ## 1. Contexto
 
@@ -38,18 +38,18 @@ Todas avaliadas sobre a rota do Cenário A (mesma rota, isolando o efeito da tro
 | Métrica | Estado atual do projeto | Combinado (fuel + pneu empíricos) |
 |---|---|---|
 | Combustível | 3.20 L | 3.92 L |
-| Desgaste de pneu | R$ 2.19 | R$ 2.99 |
-| Custo total (fórmula B) | R$ 36.20 | R$ 41.40 |
+| Desgaste de pneu | R$ 7.57 | R$ 10.33 |
+| Custo total (fórmula B) | R$ 41.57 | R$ 48.74 |
 
 Gap interno de cada perfil (rota do Cenário A vs. sua própria rota ótima do Cenário B):
 
 | Perfil | Gap (R$) | Gap (%) |
 |---|---|---|
-| Estado atual do projeto | R$ 0.10 | 0.26% |
-| Combinado (fuel + pneu empíricos) | R$ 0.14 | 0.35% |
+| Estado atual do projeto | R$ 0.13 | 0.32% |
+| Combinado (fuel + pneu empíricos) | R$ 0.19 | 0.40% |
 
 ## 7. Conclusão
 
-1. **Os dois efeitos vão na mesma direção neste log sintético:** consumo empírico 22.6% maior e vida útil de pneu empírica 26.7% menor do que o estado atual do projeto — ambos aumentam o custo por trecho, então o efeito combinado é maior do que qualquer um isolado (14.38% de aumento no custo total da rota do Cenário A, vs. os dois relatórios individuais). Isso não é garantido em geral — com outro log, consumo e vida útil de pneu poderiam divergir em direções opostas e se cancelar parcialmente.
+1. **Os dois efeitos vão na mesma direção neste log sintético:** consumo empírico 22.6% maior e vida útil de pneu empírica 26.7% menor do que o estado atual do projeto — ambos aumentam o custo por trecho, então o efeito combinado é maior do que qualquer um isolado (17.23% de aumento no custo total da rota do Cenário A, vs. os dois relatórios individuais). Isso não é garantido em geral — com outro log, consumo e vida útil de pneu poderiam divergir em direções opostas e se cancelar parcialmente.
 2. **A rota escolhida pelo Cenário B não muda ao trocar o estado atual do projeto pelo perfil combinado neste cenário** — isso significa que, ao menos para esta geometria e carga específicas, os valores exatos de consumo e vida útil do pneu não foram decisivos juntos — mudou o custo total, mas não a ordem ótima.
 3. **O que isso significa pra produção:** nenhuma dessas correções está plugada em `RouteController`/`RouteOptimizerServiceImpl` — os três relatórios deste pacote (combustível, pneu, combinado) validam a lógica com logs sintéticos. O próximo passo real seria plugar logs de abastecimento e troca de pneu de fato (ou pelo menos um piloto com poucos veículos reais) antes de considerar levar isso pra produção.

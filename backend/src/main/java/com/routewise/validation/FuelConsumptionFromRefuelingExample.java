@@ -61,13 +61,9 @@ public final class FuelConsumptionFromRefuelingExample {
     double empiricalConsumption = EmpiricalFuelConsumptionCalculator.consumptionLPer100Km(
       REFUELING_LOG, assumedProfile.baseFuelConsumptionLPer100Km()
     );
-    VehicleProfile empiricalProfile = new VehicleProfile(
-      assumedProfile.label() + " (consumo empírico)", assumedProfile.axleCount(),
-      assumedProfile.capacityKg(), assumedProfile.capacityM3(),
-      empiricalConsumption, assumedProfile.fuelPricePerLiter(),
-      assumedProfile.tireReplacementCostPerTire(), assumedProfile.tireLifeKm(),
-      assumedProfile.driverCostPerHourReais()
-    );
+    VehicleProfile empiricalProfile = assumedProfile
+      .withLabel(assumedProfile.label() + " (consumo empírico)")
+      .withFuelConsumption(empiricalConsumption);
 
     List<WaypointDto> waypoints = ToledoRouteComparisonExample.WAYPOINTS.stream()
       .map(NamedWaypoint::toDto).collect(Collectors.toList());

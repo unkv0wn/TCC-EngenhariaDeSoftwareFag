@@ -1,6 +1,6 @@
 # Validação Empírica do Custo de Rota — Relatório (Perfil: Médio (3 eixos) (calibrado: combustível + pneu empíricos))
 
-Gerado em: 2026-08-01 13:19:41
+Gerado em: 2026-08-05 00:58:38
 Trials: 500
 
 ## 1. Metodologia e suposições
@@ -41,14 +41,14 @@ fosse proporcional só à distância, as duas rotas seriam sempre idênticas).
 
 | Métrica | Valor |
 |---|---|
-| Rotas que mudaram entre Cenário A e B | 31.4% |
+| Rotas que mudaram entre Cenário A e B | 32.2% |
 | Cargas inviáveis (peso ou volume > 100% da capacidade) | 20.2% |
 | Trials em que o volume (cubagem), não o peso, foi a restrição | 46.6% |
-| Gap de custo — média | R$ 5.06 (1.13%) |
+| Gap de custo — média | R$ 6.46 (1.22%) |
 | Gap de custo — mediana | R$ 0.00 (0.00%) |
-| Gap de custo — desvio padrão | R$ 10.98 (2.30 pp) |
+| Gap de custo — desvio padrão | R$ 13.70 (2.42 pp) |
 | Gap de custo — mínimo | R$ 0.00 (0.00%) |
-| Gap de custo — máximo | R$ 81.75 (13.40%) |
+| Gap de custo — máximo | R$ 101.07 (13.88%) |
 
 "Gap" = quanto a operação deixa de economizar, em R$, seguindo a rota do Cenário A
 em vez da rota do Cenário B — sempre ≥ 0, pois a rota do Cenário B é ótima por
@@ -66,7 +66,7 @@ excluindo pares com diferença zero, aproximação normal para amostra grande):
 
 | | |
 |---|---|
-| Estatística (W) | 12403.00 |
+| Estatística (W) | 13041.00 |
 | p-valor | 0.0000 |
 
 p < 0.05 — a diferença entre as duas funções de custo é estatisticamente significativa, não apenas ruído amostral.
@@ -75,11 +75,11 @@ p < 0.05 — a diferença entre as duas funções de custo é estatisticamente s
 
 | Variável | Correlação |
 |---|---|
-| Fração de peso ocupada (peso carga / capacidade kg) | -0.059 |
-| Fração de volume ocupada (volume carga / capacidade m³) | -0.096 |
-| Ocupação efetiva (a mais restritiva das duas acima) | -0.100 |
-| Fração de trechos urbanos na rota | 0.182 |
-| Número de waypoints | 0.443 |
+| Fração de peso ocupada (peso carga / capacidade kg) | -0.048 |
+| Fração de volume ocupada (volume carga / capacidade m³) | -0.087 |
+| Ocupação efetiva (a mais restritiva das duas acima) | -0.092 |
+| Fração de trechos urbanos na rota | 0.191 |
+| Número de waypoints | 0.448 |
 
 ### 4.1 Detalhamento por número de waypoints
 
@@ -87,30 +87,30 @@ p < 0.05 — a diferença entre as duas funções de custo é estatisticamente s
 |---|---|---|---|
 | 2 | 54 | 0.0% | 0.00% |
 | 3 | 50 | 2.0% | 0.02% |
-| 4 | 65 | 10.8% | 0.36% |
-| 5 | 63 | 20.6% | 0.51% |
-| 6 | 48 | 41.7% | 1.56% |
-| 7 | 66 | 53.0% | 2.18% |
-| 8 | 37 | 56.8% | 1.68% |
-| 9 | 50 | 46.0% | 1.58% |
-| 10 | 67 | 55.2% | 2.25% |
+| 4 | 65 | 12.3% | 0.40% |
+| 5 | 63 | 20.6% | 0.56% |
+| 6 | 48 | 41.7% | 1.68% |
+| 7 | 66 | 54.5% | 2.34% |
+| 8 | 37 | 56.8% | 1.83% |
+| 9 | 50 | 50.0% | 1.69% |
+| 10 | 67 | 55.2% | 2.39% |
 
 
 ### 4.2 Detalhamento por nível de ocupação do veículo (peso ou volume, o que for maior)
 
 | Ocupação (% da capacidade) | Trials | Rotas diferentes | Gap médio (%) |
 |---|---|---|---|
-| 0–25% | 15 | 26.7% | 1.49% |
-| 25–50% | 83 | 38.6% | 1.42% |
-| 50–75% | 129 | 35.7% | 1.28% |
-| 75–100% | 172 | 27.9% | 0.98% |
-| > 100% (inviável) | 101 | 26.7% | 0.92% |
+| 0–25% | 15 | 26.7% | 1.56% |
+| 25–50% | 83 | 38.6% | 1.51% |
+| 50–75% | 129 | 36.4% | 1.39% |
+| 75–100% | 172 | 28.5% | 1.06% |
+| > 100% (inviável) | 101 | 28.7% | 0.99% |
 
 
 ## 5. Conclusão
 
 1. **Correlação com o custo:** pelo menos um indicador (ver seção 4) tem correlação não-desprezível com o tamanho do gap.
-2. **Muda a rota escolhida?** sim, em 31.4% dos trials a ordem ótima mudou entre os dois cenários.
+2. **Muda a rota escolhida?** sim, em 32.2% dos trials a ordem ótima mudou entre os dois cenários.
 3. **É estatisticamente relevante?** sim — ver teste de Wilcoxon na seção 3.
 4. **Quais indicadores importam mais?** ver as magnitudes de correlação na seção 4 — o de maior valor absoluto é o que mais explica a variação do gap.
 5. **Capacidade é respeitada?** não — o algoritmo não valida capacidade hoje; 20.2% das cargas sorteadas excederam o peso e/ou o volume máximo deste veículo e ainda assim foram roteadas normalmente.

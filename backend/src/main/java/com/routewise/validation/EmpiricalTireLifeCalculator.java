@@ -33,8 +33,6 @@ public final class EmpiricalTireLifeCalculator {
 
   private EmpiricalTireLifeCalculator() {}
 
-  public enum AxlePosition { DIANTEIRO, TRACAO, REBOQUE }
-
   public enum TireReplacementReason { DESGASTE_NORMAL, DANO_ACIDENTE }
 
   /** One tire's full lifespan: odometer at install, odometer at replacement, why, and where. */

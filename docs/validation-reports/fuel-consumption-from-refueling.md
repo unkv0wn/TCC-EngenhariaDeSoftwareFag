@@ -1,6 +1,6 @@
 # Consumo Empírico (via Histórico de Abastecimento) vs Consumo Assumido — Relatório
 
-Gerado em: 2026-08-01 12:30:05
+Gerado em: 2026-08-05 00:59:13
 
 ## 1. Contexto
 
@@ -99,9 +99,9 @@ Nesse único trecho, o consumo empírico consome +0.027 L (+22.6%) a mais do que
 |---|---|---|
 | Combustível — rota do Cenário A | 3.20 L | 3.92 L |
 | Combustível — rota do Cenário B | 3.17 L | 3.88 L |
-| Custo total (fórmula B) — rota do Cenário A | R$ 36.20 | R$ 40.60 |
-| Custo total (fórmula B) — rota do Cenário B | R$ 36.10 | R$ 40.47 |
-| Gap (A vs B, mesma fórmula) | R$ 0.10 (0.26%) | R$ 0.14 (0.34%) |
+| Custo total (fórmula B) — rota do Cenário A | R$ 41.57 | R$ 45.98 |
+| Custo total (fórmula B) — rota do Cenário B | R$ 41.44 | R$ 45.81 |
+| Gap (A vs B, mesma fórmula) | R$ 0.13 (0.32%) | R$ 0.17 (0.38%) |
 
 ## 9. Conclusão
 

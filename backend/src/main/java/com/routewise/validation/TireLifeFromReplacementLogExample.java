@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
-import static com.routewise.validation.EmpiricalTireLifeCalculator.AxlePosition.TRACAO;
+import static com.routewise.validation.AxlePosition.TRACAO;
 import static com.routewise.validation.EmpiricalTireLifeCalculator.TireReplacementReason.DANO_ACIDENTE;
 import static com.routewise.validation.EmpiricalTireLifeCalculator.TireReplacementReason.DESGASTE_NORMAL;
 
@@ -64,13 +64,9 @@ public final class TireLifeFromReplacementLogExample {
     double empiricalTireLifeKm = EmpiricalTireLifeCalculator.tireLifeKm(
       REPLACEMENT_LOG, assumedProfile.tireLifeKm()
     );
-    VehicleProfile empiricalProfile = new VehicleProfile(
-      assumedProfile.label() + " (vida útil de pneu empírica)", assumedProfile.axleCount(),
-      assumedProfile.capacityKg(), assumedProfile.capacityM3(),
-      assumedProfile.baseFuelConsumptionLPer100Km(), assumedProfile.fuelPricePerLiter(),
-      assumedProfile.tireReplacementCostPerTire(), empiricalTireLifeKm,
-      assumedProfile.driverCostPerHourReais()
-    );
+    VehicleProfile empiricalProfile = assumedProfile
+      .withLabel(assumedProfile.label() + " (vida útil de pneu empírica)")
+      .withTireLifeKm(empiricalTireLifeKm);
 
     List<WaypointDto> waypoints = ToledoRouteComparisonExample.WAYPOINTS.stream()
       .map(NamedWaypoint::toDto).collect(Collectors.toList());
