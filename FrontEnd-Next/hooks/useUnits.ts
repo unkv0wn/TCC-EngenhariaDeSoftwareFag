@@ -13,6 +13,7 @@ const INITIAL_UNITS: Unit[] = [
   { id: "kg", code: "KG", name: "Quilo" },
   { id: "cx", code: "CX", name: "Caixa" },
   { id: "l", code: "L", name: "Litro" },
+  { id: "pl", code: "PL", name: "Paletes" },
 ];
 
 export function useUnits() {

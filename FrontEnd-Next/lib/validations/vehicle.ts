@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { requiredNumber } from "@/lib/validations/zodNumber";
+
 const OLD_PLATE_REGEX = /^[A-Z]{3}-\d{4}$/;
 const MERCOSUL_PLATE_REGEX = /^[A-Z]{3}\d[A-Z]\d{2}$/;
 
@@ -16,9 +18,6 @@ export const FUEL_TYPES: { value: FuelType; label: string }[] = [
 
 const currentYear = new Date().getFullYear();
 
-// react-hook-form's valueAsNumber turns an empty numeric input into NaN, not undefined —
-// these checks catch NaN explicitly so the error message stays in Portuguese instead of
-// falling through to zod's default "invalid_type" message.
 export const vehicleSchema = z.object({
   plate: z
     .string()
@@ -29,17 +28,14 @@ export const vehicleSchema = z.object({
     }),
   model: z.string().min(1, "Informe o modelo."),
   brand: z.string().min(1, "Informe a marca."),
-  year: z
-    .number()
-    .refine((value) => !Number.isNaN(value), { message: "Informe o ano." })
-    .refine((value) => Number.isInteger(value) && value >= 1950 && value <= currentYear + 1, {
-      message: "Informe um ano válido.",
-    }),
+  year: requiredNumber("Informe o ano.").refine(
+    (value) => Number.isInteger(value) && value >= 1950 && value <= currentYear + 1,
+    { message: "Informe um ano válido." }
+  ),
   color: z.string().min(1, "Informe a cor."),
-  capacityKg: z
-    .number()
-    .refine((value) => !Number.isNaN(value), { message: "Informe a capacidade." })
-    .refine((value) => value > 0, { message: "Informe uma capacidade válida." }),
+  capacityKg: requiredNumber("Informe a capacidade.").refine((value) => value > 0, {
+    message: "Informe uma capacidade válida.",
+  }),
   fuelType: z.enum(FUEL_VALUES, { message: "Selecione o tipo de combustível." }),
 });
 
