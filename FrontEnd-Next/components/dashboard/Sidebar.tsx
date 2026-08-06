@@ -9,6 +9,7 @@ import {
   FolderOpen,
   LayoutDashboard,
   LogOut,
+  Package,
   Route as RouteIcon,
   Settings,
 } from "lucide-react";
@@ -21,7 +22,10 @@ const NAV_GROUPS = [
   },
   {
     label: "Cadastros",
-    items: [{ href: "/dashboard/veiculos", label: "Veículos", icon: Car }],
+    items: [
+      { href: "/dashboard/veiculos", label: "Veículos", icon: Car },
+      { href: "/dashboard/produtos", label: "Produtos", icon: Package },
+    ],
   },
   {
     label: "Rotas",
