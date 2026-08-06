@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import type { Customer } from "@/hooks/useCustomers";
+import { useToast } from "@/hooks/useToast";
 import { maskDocument, maskPhone, maskZipCode } from "@/lib/masks";
 import {
   BRAZIL_STATES,
@@ -17,7 +18,12 @@ import {
   PERSON_TYPES,
   customerSchema,
   type CustomerFormData,
+  type PersonType,
 } from "@/lib/validations/customer";
+import { fetchCompanyByCnpj } from "@/services/brasilApi";
+import { fetchAddressByZipCode } from "@/services/viaCep";
+
+const LOOKUP_DEBOUNCE_MS = 600;
 
 const EMPTY_VALUES: Partial<CustomerFormData> = {
   personType: "fisica",
@@ -45,6 +51,7 @@ interface CustomerFormModalProps {
 
 export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormModalProps) {
   const isEditing = customer !== null;
+  const { error } = useToast();
 
   const {
     register,
@@ -66,6 +73,84 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
   const personType = watch("personType");
   const isJuridica = personType === "juridica";
 
+  const [isLookingUpCep, setIsLookingUpCep] = useState(false);
+  const [isLookingUpCnpj, setIsLookingUpCnpj] = useState(false);
+  const cepTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const cnpjTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const cepRequestIdRef = useRef(0);
+  const cnpjRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(cepTimerRef.current);
+      clearTimeout(cnpjTimerRef.current);
+    };
+  }, []);
+
+  // Debounced: fires LOOKUP_DEBOUNCE_MS after the CEP reaches 8 digits, cancelling on every
+  // keystroke in between. A monotonic request id guards against an older response overwriting
+  // a newer one if the user edits the field again before the first lookup resolves.
+  function scheduleZipCodeLookup(maskedZipCode: string) {
+    clearTimeout(cepTimerRef.current);
+    if (maskedZipCode.replace(/\D/g, "").length !== 8) return;
+
+    cepTimerRef.current = setTimeout(async () => {
+      const requestId = ++cepRequestIdRef.current;
+      setIsLookingUpCep(true);
+      try {
+        const address = await fetchAddressByZipCode(maskedZipCode);
+        if (cepRequestIdRef.current !== requestId) return;
+        if (!address) {
+          error("CEP não encontrado", "Não foi possível localizar esse CEP. Preencha o endereço manualmente.");
+          return;
+        }
+        setValue("address.street", address.street, { shouldValidate: true });
+        setValue("address.district", address.district, { shouldValidate: true });
+        setValue("address.city", address.city, { shouldValidate: true });
+        setValue("address.state", address.state, { shouldValidate: true });
+      } catch {
+        if (cepRequestIdRef.current === requestId) {
+          error("Não foi possível consultar o CEP", "Tente novamente ou preencha o endereço manualmente.");
+        }
+      } finally {
+        if (cepRequestIdRef.current === requestId) setIsLookingUpCep(false);
+      }
+    }, LOOKUP_DEBOUNCE_MS);
+  }
+
+  function scheduleDocumentLookup(maskedDocument: string, currentPersonType: PersonType) {
+    clearTimeout(cnpjTimerRef.current);
+    if (currentPersonType !== "juridica" || maskedDocument.replace(/\D/g, "").length !== 14) return;
+
+    cnpjTimerRef.current = setTimeout(async () => {
+      const requestId = ++cnpjRequestIdRef.current;
+      setIsLookingUpCnpj(true);
+      try {
+        const company = await fetchCompanyByCnpj(maskedDocument);
+        if (cnpjRequestIdRef.current !== requestId) return;
+        if (!company) {
+          error("CNPJ não encontrado", "Não foi possível localizar esse CNPJ. Preencha os dados manualmente.");
+          return;
+        }
+        setValue("name", company.name, { shouldValidate: true });
+        setValue("tradeName", company.tradeName, { shouldValidate: true });
+        setValue("address.zipCode", maskZipCode(company.address.zipCode), { shouldValidate: true });
+        setValue("address.street", company.address.street, { shouldValidate: true });
+        setValue("address.number", company.address.number, { shouldValidate: true });
+        setValue("address.complement", company.address.complement, { shouldValidate: true });
+        setValue("address.district", company.address.district, { shouldValidate: true });
+        setValue("address.city", company.address.city, { shouldValidate: true });
+        setValue("address.state", company.address.state, { shouldValidate: true });
+      } catch {
+        if (cnpjRequestIdRef.current === requestId) {
+          error("Não foi possível consultar o CNPJ", "Tente novamente ou preencha os dados manualmente.");
+        }
+      } finally {
+        if (cnpjRequestIdRef.current === requestId) setIsLookingUpCnpj(false);
+      }
+    }, LOOKUP_DEBOUNCE_MS);
+  }
+
   return (
     <Modal title={isEditing ? "Editar cliente" : "Novo cliente"} onClose={onClose} size="lg">
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4 px-6 py-5">
@@ -78,6 +163,7 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
             error={errors.personType?.message}
             {...register("personType", {
               onChange: () => {
+                clearTimeout(cnpjTimerRef.current);
                 resetField("document");
                 resetField("tradeName");
               },
@@ -99,7 +185,9 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
             error={errors.document?.message}
             {...register("document", {
               onChange: (event) => {
-                setValue("document", maskDocument(event.target.value, personType), { shouldValidate: false });
+                const masked = maskDocument(event.target.value, personType);
+                setValue("document", masked, { shouldValidate: false });
+                scheduleDocumentLookup(masked, personType);
               },
             })}
           />
@@ -110,6 +198,7 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
             {...register("name")}
           />
         </div>
+        {isLookingUpCnpj && <p className="-mt-2 text-xs font-medium text-gray-400">Consultando CNPJ...</p>}
 
         {isJuridica && (
           <Input
@@ -149,7 +238,9 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
             error={errors.address?.zipCode?.message}
             {...register("address.zipCode", {
               onChange: (event) => {
-                setValue("address.zipCode", maskZipCode(event.target.value), { shouldValidate: false });
+                const masked = maskZipCode(event.target.value);
+                setValue("address.zipCode", masked, { shouldValidate: false });
+                scheduleZipCodeLookup(masked);
               },
             })}
           />
@@ -160,6 +251,7 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
             {...register("address.street")}
           />
         </div>
+        {isLookingUpCep && <p className="-mt-2 text-xs font-medium text-gray-400">Consultando CEP...</p>}
 
         <div className="grid grid-cols-2 gap-3">
           <Input
