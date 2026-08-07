@@ -18,8 +18,9 @@ Ou seja: **Faturamento é quem monta a rota**, não o pedido individual. Cada m�
 
 1. **Cadastros**
    - [x] Veículos — feito
-   - [ ] Itens
-   - [ ] Clientes/Fornecedores
+   - [x] Unidades de Medida — feito (não estava na fila original; virou pré-requisito de Produtos ao especificar o campo de unidade)
+   - [x] Produtos — feito (era "Itens")
+   - [x] Clientes/Fornecedores — feito (uma tela só, campo de tipo Cliente/Fornecedor/Ambos)
    - [ ] Motoristas
 2. **Pedidos**
    - [ ] Novo pedido (cliente + itens)
@@ -36,8 +37,12 @@ Ou seja: **Faturamento é quem monta a rota**, não o pedido individual. Cada m�
 - Motoristas entra em Cadastros.
 - Sequência de construção: Cadastros → Pedidos → Faturamento → Rotas (de baixo pra cima, cada etapa é pré-requisito da próxima).
 - Cada módulo passa pelo processo de brainstorming (mockups + Q&A) antes de virar spec e implementação — igual foi feito com Veículos e o Toast.
+- Cliente e Fornecedor ficam numa tela só (`/dashboard/clientes`), distinguidos por um campo `type` (`cliente`/`fornecedor`/`ambos`) com filtro na listagem — não viram cadastros separados.
+- Unidade de Medida virou cadastro próprio (`/dashboard/unidades`), não um enum fixo em código — Produtos referencia a unidade por id e a exclusão de uma unidade em uso por algum produto é bloqueada.
+- CEP e CNPJ no cadastro de Clientes são consultados automaticamente (ViaCEP e BrasilAPI, gratuitas e sem chave) e preenchem o formulário; os campos continuam editáveis depois.
+- Primitivas de UI compartilhadas moraram em `components/ui/`: `Modal`, `ConfirmDialog`, `PageHeader`, `CreateButton`, `SearchInput`, `EmptyState`, `ViewToggle`, `Textarea` — ver `CLAUDE.md` para o inventário completo. Cada cadastro novo deve reusar essas primitivas em vez de duplicar overlay/header/busca.
 
 ## Em aberto
 
-- Campos e regras de validação de cada cadastro/módulo ainda não definidos.
+- Campos e regras de validação do cadastro de Motoristas ainda não definidos.
 - Detalhe de como o Despacho (motorista + veículo + rota) funciona na prática.
