@@ -21,7 +21,7 @@ Ou seja: **Faturamento é quem monta a rota**, não o pedido individual. Cada m�
    - [x] Unidades de Medida — feito (não estava na fila original; virou pré-requisito de Produtos ao especificar o campo de unidade)
    - [x] Produtos — feito (era "Itens")
    - [x] Clientes/Fornecedores — feito (uma tela só, campo de tipo Cliente/Fornecedor/Ambos)
-   - [ ] Motoristas
+   - [x] Motoristas — feito (nome, CPF, telefone, CNH — número/categoria/validade —, status; sem vínculo com veículo, isso fica pro Despacho)
 2. **Pedidos**
    - [ ] Novo pedido (cliente + itens)
    - [ ] Dashboard de pedidos (mini-dashboard)
@@ -44,5 +44,4 @@ Ou seja: **Faturamento é quem monta a rota**, não o pedido individual. Cada m�
 
 ## Em aberto
 
-- Campos e regras de validação do cadastro de Motoristas ainda não definidos.
 - Detalhe de como o Despacho (motorista + veículo + rota) funciona na prática.

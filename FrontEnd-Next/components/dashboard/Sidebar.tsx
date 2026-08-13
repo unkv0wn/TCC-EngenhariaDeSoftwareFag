@@ -7,6 +7,7 @@ import {
   Car,
   ChevronDown,
   FolderOpen,
+  IdCard,
   LayoutDashboard,
   LogOut,
   Package,
@@ -29,6 +30,7 @@ const NAV_GROUPS = [
       { href: "/dashboard/unidades", label: "Unidades de Medida", icon: Ruler },
       { href: "/dashboard/produtos", label: "Produtos", icon: Package },
       { href: "/dashboard/clientes", label: "Clientes", icon: Users },
+      { href: "/dashboard/motoristas", label: "Motoristas", icon: IdCard },
     ],
   },
   {

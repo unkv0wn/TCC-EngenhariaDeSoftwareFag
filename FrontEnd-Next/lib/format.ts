@@ -21,6 +21,11 @@ export function formatDocument(value: string): string {
   return value;
 }
 
+/** @param isoDate "YYYY-MM-DD", the shape a native `<input type="date">` produces */
+export function formatDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString("pt-BR");
+}
+
 export function formatPhone(value: string): string {
   const digits = value.replace(/\D/g, "");
 
