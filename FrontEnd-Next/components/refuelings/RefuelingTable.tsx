@@ -3,18 +3,20 @@ import { Pencil, Trash2 } from "lucide-react";
 import type { Driver } from "@/hooks/useDrivers";
 import type { Refueling } from "@/hooks/useRefuelings";
 import type { Vehicle } from "@/hooks/useVehicles";
-import { calculateTotalPrice } from "@/lib/refuelingCalculations";
+import { calculateAverageKmPerLiter, calculateTotalPrice } from "@/lib/refuelingCalculations";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 const TABLE_HEADINGS = [
   "Data",
   "Veículo",
   "Motorista",
-  "Odômetro",
+  "Odômetro anterior",
+  "Odômetro atual",
+  "Km rodado",
+  "Média (km/L)",
   "Litros",
   "R$/L",
   "Total",
-  "Km rodado",
   "Posto",
   "",
 ];
@@ -47,6 +49,9 @@ export function RefuelingTable({ refuelings, vehicles, drivers, onEdit, onDelete
           {refuelings.map((refueling) => {
             const vehicle = vehicles.find((option) => option.id === refueling.vehicleId);
             const driver = drivers.find((option) => option.id === refueling.driverId);
+            const previousOdometerKm =
+              refueling.kmSincePrevious === null ? null : refueling.odometerKm - refueling.kmSincePrevious;
+            const averageKmPerLiter = calculateAverageKmPerLiter(refueling.kmSincePrevious, refueling.litersRefueled);
             return (
               <tr key={refueling.id} className="border-b border-gray-100 last:border-0">
                 <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
@@ -59,7 +64,18 @@ export function RefuelingTable({ refuelings, vehicles, drivers, onEdit, onDelete
                   {driver?.fullName ?? "—"}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
+                  {previousOdometerKm === null ? "—" : `${previousOdometerKm.toLocaleString("pt-BR")} km`}
+                </td>
+                <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
                   {refueling.odometerKm.toLocaleString("pt-BR")} km
+                </td>
+                <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
+                  {refueling.kmSincePrevious === null ? "—" : `${refueling.kmSincePrevious.toLocaleString("pt-BR")} km`}
+                </td>
+                <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
+                  {averageKmPerLiter === null
+                    ? "—"
+                    : `${averageKmPerLiter.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} km/L`}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
                   {refueling.litersRefueled.toLocaleString("pt-BR")} L
@@ -69,9 +85,6 @@ export function RefuelingTable({ refuelings, vehicles, drivers, onEdit, onDelete
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-bold text-gray-900">
                   {formatCurrency(calculateTotalPrice(refueling.litersRefueled, refueling.pricePerLiter))}
-                </td>
-                <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
-                  {refueling.kmSincePrevious === null ? "—" : `${refueling.kmSincePrevious.toLocaleString("pt-BR")} km`}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
                   {refueling.location || "—"}

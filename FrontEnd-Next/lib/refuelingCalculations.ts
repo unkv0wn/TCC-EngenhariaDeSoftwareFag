@@ -31,3 +31,8 @@ export function calculateKmSincePrevious(odometerKm: number, previousOdometerKm:
 export function calculateTotalPrice(litersRefueled: number, pricePerLiter: number): number {
   return litersRefueled * pricePerLiter;
 }
+
+/** Média de consumo (km/L) do trecho — null quando não há km rodado pra comparar (primeiro abastecimento). */
+export function calculateAverageKmPerLiter(kmSincePrevious: number | null, litersRefueled: number): number | null {
+  return kmSincePrevious === null || litersRefueled <= 0 ? null : kmSincePrevious / litersRefueled;
+}
