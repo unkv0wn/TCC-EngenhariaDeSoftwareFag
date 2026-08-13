@@ -1,6 +1,7 @@
 package com.routewise.service.impl;
 
 import com.routewise.algorithm.AStarWaypointOptimizer;
+import com.routewise.algorithm.HaversineUtil;
 import com.routewise.dto.RouteRequestDto;
 import com.routewise.dto.RouteResultDto;
 import com.routewise.dto.RouteResultDto.GeoJsonLineString;
@@ -10,7 +11,6 @@ import com.routewise.dto.RouteResultDto.RouteSegmentDto;
 import com.routewise.dto.SseEventDto;
 import com.routewise.dto.WaypointDto;
 import com.routewise.dto.osrm.OsrmRouteResponse;
-import com.routewise.dto.osrm.OsrmTableResponse;
 import com.routewise.exception.OsrmClientException;
 import com.routewise.exception.RouteComputationException;
 import com.routewise.service.IOsrmClient;
@@ -29,21 +29,42 @@ import java.util.List;
  * <h2>Computation Pipeline</h2>
  * <ol>
  *   <li>Emit {@code PROCESSING} event via SSE.</li>
- *   <li>Call OSRM {@code /table} to build an N×N duration matrix.</li>
+ *   <li>Call OSRM {@code /table} to build an N×N duration matrix; falls back to a
+ *       {@link HaversineUtil}-distance estimate at a constant average speed if OSRM
+ *       is unavailable (see below).</li>
  *   <li>Run A* on the complete waypoint graph to find optimal visitation order.</li>
  *   <li>Build the ordered waypoint list; append origin if {@code ROUND_TRIP}.</li>
  *   <li>Call OSRM {@code /route} with the ordered waypoints to get geometry.</li>
  *   <li>Emit {@code COMPLETED} event with {@link RouteResultDto}.</li>
  * </ol>
  *
- * <p>If the OSRM validation call (step 5) fails, the system degrades gracefully:
- * the result still contains the A*-optimised order but no route geometry from OSRM
- * and the {@code osrmValidation} field is set to {@code UNAVAILABLE}.
+ * <h2>Graceful Degradation</h2>
+ * Both OSRM calls degrade instead of aborting the whole request, but not the same way:
+ * <ul>
+ *   <li><strong>Step 2</strong> ({@code /table}): if the call fails, the duration
+ *       matrix is approximated as straight-line distance ({@link HaversineUtil})
+ *       divided by {@value #FALLBACK_AVG_SPEED_KMH} km/h. A* still runs and returns
+ *       a valid visitation order — just one computed against a coarser matrix, since
+ *       straight-line distance at a constant speed ignores real road geometry and
+ *       traffic. This is the one degradation path that changes the optimisation
+ *       input itself, not just what's rendered afterwards.</li>
+ *   <li><strong>Step 5</strong> ({@code /route}): if the call fails, the result
+ *       still contains the A*-optimised order but no route geometry from OSRM
+ *       and the {@code osrmValidation} field is set to {@code UNAVAILABLE}.</li>
+ * </ul>
  */
 @Service
 public class RouteOptimizerServiceImpl implements IRouteOptimizerService {
 
   private static final Logger log = LoggerFactory.getLogger(RouteOptimizerServiceImpl.class);
+
+  /**
+   * Average speed (km/h) assumed when approximating travel duration from
+   * straight-line distance, used only when OSRM {@code /table} is unreachable.
+   * A generic urban/mixed-road figure — not tuned per road type, since the
+   * fallback has no road-type information to work with.
+   */
+  private static final double FALLBACK_AVG_SPEED_KMH = 40.0;
 
   /**
    * Colour palette for route segments. Each segment is assigned a colour by
@@ -85,9 +106,8 @@ public class RouteOptimizerServiceImpl implements IRouteOptimizerService {
       // ── Step 1: Notify client that computation is in progress ─────────
       sseEventService.emit(requestId, SseEventDto.processing(requestId));
 
-      // ── Step 2: Fetch OSRM duration matrix ────────────────────────────
-      OsrmTableResponse tableResponse = osrmClient.fetchDurationMatrix(request.waypoints());
-      double[][] durationMatrix = tableResponse.durations();
+      // ── Step 2: Fetch OSRM duration matrix (falls back to Haversine on failure) ──
+      double[][] durationMatrix = fetchDurationMatrixWithFallback(request.waypoints(), requestId);
 
       validateMatrix(durationMatrix, request.waypoints().size(), requestId);
 
@@ -271,6 +291,48 @@ public class RouteOptimizerServiceImpl implements IRouteOptimizerService {
       result.add(new OrderedWaypointDto(seq, wp.lat(), wp.lng()));
     }
     return result;
+  }
+
+  /**
+   * Fetches the OSRM duration matrix, falling back to a Haversine-distance-based
+   * estimate if the {@code /table} call fails. This is the fallback described in
+   * the class Javadoc — the only one that feeds the A* optimiser itself, as
+   * opposed to the {@code /route} fallback in {@link #fetchOsrmRouteAndBuildResult}
+   * which only affects rendered geometry.
+   */
+  private double[][] fetchDurationMatrixWithFallback(List<WaypointDto> waypoints, String requestId) {
+    try {
+      return osrmClient.fetchDurationMatrix(waypoints).durations();
+    } catch (OsrmClientException ex) {
+      log.warn(
+        "OSRM /table call failed for requestId={}; falling back to Haversine-based "
+          + "duration estimate at {} km/h: {}",
+        requestId, FALLBACK_AVG_SPEED_KMH, ex.getMessage()
+      );
+      return buildFallbackDurationMatrix(waypoints);
+    }
+  }
+
+  /**
+   * Builds an approximate duration matrix from straight-line distance at a
+   * constant average speed. Coarser than OSRM (ignores road geometry, traffic,
+   * and road type), but keeps the computation running instead of aborting.
+   */
+  private double[][] buildFallbackDurationMatrix(List<WaypointDto> waypoints) {
+    int n = waypoints.size();
+    double[][] matrix = new double[n][n];
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < n; j++) {
+        if (i == j) {
+          continue;
+        }
+        WaypointDto from = waypoints.get(i);
+        WaypointDto to = waypoints.get(j);
+        double distanceKm = HaversineUtil.distanceKm(from.lat(), from.lng(), to.lat(), to.lng());
+        matrix[i][j] = (distanceKm / FALLBACK_AVG_SPEED_KMH) * 3600.0;
+      }
+    }
+    return matrix;
   }
 
   /** Validates that the OSRM duration matrix is non-null and square. */

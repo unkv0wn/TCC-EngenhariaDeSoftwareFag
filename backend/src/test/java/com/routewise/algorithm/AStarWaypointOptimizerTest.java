@@ -140,6 +140,59 @@ class AStarWaypointOptimizerTest {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // FIXED_START_END tests
+  // ─────────────────────────────────────────────────────────────────────────
+
+  @Test
+  @DisplayName("FIXED_START_END: starts at 0, ends at n-1, and total cost matches the true optimum")
+  void fixedStartEnd_fourWaypoints_startsAtZeroEndsAtLastWithOptimalCost() {
+    // With start=0 and end=3 fixed, only the two interior waypoints (1, 2) can be
+    // reordered, so there are exactly two candidate visitation orders:
+    //   0 → 1 → 2 → 3 = costs[0][1] + costs[1][2] + costs[2][3] = 4 + 2 + 6 = 12
+    //   0 → 2 → 1 → 3 = costs[0][2] + costs[2][1] + costs[1][3] = 1 + 2 + 3 =  6  (optimal)
+    double[][] costs = {
+      { 0, 4, 1, 9},
+      { 4, 0, 2, 3},
+      { 1, 2, 0, 6},
+      { 9, 3, 6, 0}
+    };
+
+    List<Integer> result = optimizer.optimize(costs, RouteMode.FIXED_START_END);
+
+    assertThat(result.get(0)).as("must start at waypoint 0").isEqualTo(0);
+    assertThat(result.get(result.size() - 1)).as("must end at waypoint n-1").isEqualTo(3);
+    assertThat(result).containsExactly(0, 2, 1, 3);
+
+    double totalAlongPath = 0;
+    for (int k = 0; k < result.size() - 1; k++) {
+      totalAlongPath += costs[result.get(k)][result.get(k + 1)];
+    }
+    assertThat(totalAlongPath).isEqualTo(6.0);
+  }
+
+  @Test
+  @DisplayName("FIXED_START_END: never visits n-1 before every other waypoint is visited")
+  void fixedStartEnd_neverVisitsDestinationEarly() {
+    // A symmetric matrix where, without the FIXED_START_END expansion guard, a
+    // greedy/lucky search could be tempted to reach waypoint 3 early (it's cheap
+    // from everywhere) and only backtrack to it because it happens to also be
+    // required at the end.
+    double[][] costs = {
+      { 0, 10, 10,  1},
+      {10,  0, 10,  1},
+      {10, 10,  0,  1},
+      { 1,  1,  1,  0}
+    };
+
+    List<Integer> result = optimizer.optimize(costs, RouteMode.FIXED_START_END);
+
+    assertThat(result.get(0)).isEqualTo(0);
+    assertThat(result.get(result.size() - 1)).isEqualTo(3);
+    assertThat(result.subList(0, result.size() - 1)).doesNotContain(3);
+    assertThat(result).containsExactlyInAnyOrder(0, 1, 2, 3);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Edge cases
   // ─────────────────────────────────────────────────────────────────────────
 
