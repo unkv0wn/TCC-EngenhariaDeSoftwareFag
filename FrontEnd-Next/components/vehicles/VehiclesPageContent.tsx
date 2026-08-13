@@ -13,11 +13,13 @@ import { VehicleFormModal } from "@/components/vehicles/VehicleFormModal";
 import { VehicleGrid } from "@/components/vehicles/VehicleGrid";
 import { VehicleTable } from "@/components/vehicles/VehicleTable";
 import { useVehicles, type Vehicle } from "@/hooks/useVehicles";
+import { useRefuelings } from "@/hooks/useRefuelings";
 import { useToast } from "@/hooks/useToast";
 import type { VehicleFormData } from "@/lib/validations/vehicle";
 
 export function VehiclesPageContent() {
   const { vehicles, createVehicle, updateVehicle, deleteVehicle } = useVehicles();
+  const { refuelings } = useRefuelings();
   const { success, error } = useToast();
   const [view, setView] = useState<ListView>("cards");
   const [search, setSearch] = useState("");
@@ -69,6 +71,18 @@ export function VehiclesPageContent() {
     closeForm();
   }
 
+  function handleDeleteClick(vehicle: Vehicle) {
+    const usageCount = refuelings.filter((refueling) => refueling.vehicleId === vehicle.id).length;
+    if (usageCount > 0) {
+      error(
+        "Veículo em uso",
+        `${usageCount} abastecimento(s) usam este veículo e ele não pode ser excluído.`
+      );
+      return;
+    }
+    setVehicleToDelete(vehicle);
+  }
+
   return (
     <div className="flex flex-1">
       <Sidebar />
@@ -95,9 +109,9 @@ export function VehiclesPageContent() {
             }
           />
         ) : view === "cards" ? (
-          <VehicleGrid vehicles={filteredVehicles} onEdit={openEditForm} onDelete={setVehicleToDelete} />
+          <VehicleGrid vehicles={filteredVehicles} onEdit={openEditForm} onDelete={handleDeleteClick} />
         ) : (
-          <VehicleTable vehicles={filteredVehicles} onEdit={openEditForm} onDelete={setVehicleToDelete} />
+          <VehicleTable vehicles={filteredVehicles} onEdit={openEditForm} onDelete={handleDeleteClick} />
         )}
       </main>
 

@@ -13,11 +13,13 @@ import { DriverFormModal } from "@/components/drivers/DriverFormModal";
 import { DriverGrid } from "@/components/drivers/DriverGrid";
 import { DriverTable } from "@/components/drivers/DriverTable";
 import { useDrivers, type Driver } from "@/hooks/useDrivers";
+import { useRefuelings } from "@/hooks/useRefuelings";
 import { useToast } from "@/hooks/useToast";
 import type { DriverFormData } from "@/lib/validations/driver";
 
 export function DriversPageContent() {
   const { drivers, createDriver, updateDriver, deleteDriver } = useDrivers();
+  const { refuelings } = useRefuelings();
   const { success, error } = useToast();
   const [view, setView] = useState<ListView>("cards");
   const [search, setSearch] = useState("");
@@ -68,6 +70,18 @@ export function DriversPageContent() {
     closeForm();
   }
 
+  function handleDeleteClick(driver: Driver) {
+    const usageCount = refuelings.filter((refueling) => refueling.driverId === driver.id).length;
+    if (usageCount > 0) {
+      error(
+        "Motorista em uso",
+        `${usageCount} abastecimento(s) usam este motorista e ele não pode ser excluído.`
+      );
+      return;
+    }
+    setDriverToDelete(driver);
+  }
+
   return (
     <div className="flex flex-1">
       <Sidebar />
@@ -92,9 +106,9 @@ export function DriversPageContent() {
             }
           />
         ) : view === "cards" ? (
-          <DriverGrid drivers={filteredDrivers} onEdit={openEditForm} onDelete={setDriverToDelete} />
+          <DriverGrid drivers={filteredDrivers} onEdit={openEditForm} onDelete={handleDeleteClick} />
         ) : (
-          <DriverTable drivers={filteredDrivers} onEdit={openEditForm} onDelete={setDriverToDelete} />
+          <DriverTable drivers={filteredDrivers} onEdit={openEditForm} onDelete={handleDeleteClick} />
         )}
       </main>
 

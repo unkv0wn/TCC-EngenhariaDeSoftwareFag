@@ -22,6 +22,7 @@ Ou seja: **Faturamento é quem monta a rota**, não o pedido individual. Cada m�
    - [x] Produtos — feito (era "Itens")
    - [x] Clientes/Fornecedores — feito (uma tela só, campo de tipo Cliente/Fornecedor/Ambos)
    - [x] Motoristas — feito (nome, CPF, telefone, CNH — número/categoria/validade —, status; sem vínculo com veículo, isso fica pro Despacho)
+   - [x] Abastecimentos — feito (não estava na fila original; adicionado pra registrar litros/odômetro/preço por abastecimento, com km rodado calculado a partir do histórico do veículo — espelha o modelo empírico de consumo já usado no backend, `EmpiricalFuelConsumptionCalculator`)
 2. **Pedidos**
    - [ ] Novo pedido (cliente + itens)
    - [ ] Dashboard de pedidos (mini-dashboard)
@@ -41,6 +42,8 @@ Ou seja: **Faturamento é quem monta a rota**, não o pedido individual. Cada m�
 - Unidade de Medida virou cadastro próprio (`/dashboard/unidades`), não um enum fixo em código — Produtos referencia a unidade por id e a exclusão de uma unidade em uso por algum produto é bloqueada.
 - CEP e CNPJ no cadastro de Clientes são consultados automaticamente (ViaCEP e BrasilAPI, gratuitas e sem chave) e preenchem o formulário; os campos continuam editáveis depois.
 - Primitivas de UI compartilhadas moraram em `components/ui/`: `Modal`, `ConfirmDialog`, `PageHeader`, `CreateButton`, `SearchInput`, `EmptyState`, `ViewToggle`, `Textarea` — ver `CLAUDE.md` para o inventário completo. Cada cadastro novo deve reusar essas primitivas em vez de duplicar overlay/header/busca.
+- Abastecimentos referencia Veículo e Motorista por `id`; excluir um Veículo ou Motorista com abastecimentos registrados é bloqueado, mesmo padrão de Unidade↔Produto.
+- `kmSincePrevious` de um abastecimento é calculado e congelado na criação (não recalculado depois se um registro anterior do mesmo veículo for editado) — ver `docs/superpowers/specs/2026-08-13-drivers-and-refuelings-registration-design.md`.
 
 ## Em aberto
 
