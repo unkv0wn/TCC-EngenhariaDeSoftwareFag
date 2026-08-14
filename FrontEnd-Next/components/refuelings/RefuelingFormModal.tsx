@@ -19,7 +19,6 @@ const EMPTY_VALUES: Partial<RefuelingFormData> = {
   vehicleId: "",
   driverId: "",
   date: "",
-  location: "",
 };
 
 interface RefuelingFormModalProps {
@@ -129,13 +128,6 @@ export function RefuelingFormModal({
           />
         </div>
         {totalPreviewLabel && <p className="-mt-2 text-xs font-medium text-gray-400">{totalPreviewLabel}</p>}
-
-        <Input
-          label="Posto (opcional)"
-          placeholder="Posto Shell Centro"
-          error={errors.location?.message}
-          {...register("location")}
-        />
 
         <div className="mt-2 flex justify-end gap-2.5 border-t border-gray-100 pt-4">
           <Button type="button" variant="secondary" className="w-auto" onClick={onClose}>

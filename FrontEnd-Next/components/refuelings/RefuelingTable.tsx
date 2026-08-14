@@ -17,7 +17,6 @@ const TABLE_HEADINGS = [
   "Litros",
   "R$/L",
   "Total",
-  "Posto",
   "",
 ];
 
@@ -85,9 +84,6 @@ export function RefuelingTable({ refuelings, vehicles, drivers, onEdit, onDelete
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-bold text-gray-900">
                   {formatCurrency(calculateTotalPrice(refueling.litersRefueled, refueling.pricePerLiter))}
-                </td>
-                <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
-                  {refueling.location || "—"}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3">
                   <div className="flex items-center justify-end gap-1">

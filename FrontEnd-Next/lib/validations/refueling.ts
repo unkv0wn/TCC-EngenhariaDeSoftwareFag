@@ -26,7 +26,6 @@ export const refuelingSchema = z.object({
   pricePerLiter: requiredNumber("Informe o preço por litro.").refine((value) => value > 0, {
     message: "Informe um preço válido.",
   }),
-  location: z.string().max(120, "Máximo de 120 caracteres.").optional(),
 });
 
 export type RefuelingFormData = z.infer<typeof refuelingSchema>;

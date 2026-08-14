@@ -80,7 +80,7 @@ export function CustomersPageContent() {
     <div className="flex flex-1">
       <Sidebar />
 
-      <main className="flex-1 bg-gray-50 px-8 py-7">
+      <main className="min-w-0 flex-1 bg-gray-50 px-8 py-7">
         <PageHeader title="Clientes" subtitle="Gerencie seus clientes e fornecedores">
           <CustomerTypeFilter value={typeFilter} onChange={setTypeFilter} />
           <ViewToggle view={view} onChange={setView} />

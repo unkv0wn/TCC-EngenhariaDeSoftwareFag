@@ -19,7 +19,6 @@ const INITIAL_REFUELINGS: Refueling[] = [
     odometerKm: 15000,
     litersRefueled: 45,
     pricePerLiter: 6.1,
-    location: "Posto Ipiranga BR-277",
     kmSincePrevious: null,
   },
   {
@@ -30,7 +29,6 @@ const INITIAL_REFUELINGS: Refueling[] = [
     odometerKm: 15650,
     litersRefueled: 48,
     pricePerLiter: 6.15,
-    location: "Posto Shell Centro",
     kmSincePrevious: 650,
   },
   {
@@ -41,7 +39,6 @@ const INITIAL_REFUELINGS: Refueling[] = [
     odometerKm: 8200,
     litersRefueled: 38,
     pricePerLiter: 5.95,
-    location: "Posto BR Rodovia",
     kmSincePrevious: null,
   },
   {
@@ -52,7 +49,6 @@ const INITIAL_REFUELINGS: Refueling[] = [
     odometerKm: 22300,
     litersRefueled: 52,
     pricePerLiter: 6.1,
-    location: "",
     kmSincePrevious: null,
   },
 ];

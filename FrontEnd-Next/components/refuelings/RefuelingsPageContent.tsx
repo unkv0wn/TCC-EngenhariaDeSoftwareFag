@@ -8,9 +8,9 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
-import { Select } from "@/components/ui/Select";
 import { RefuelingFormModal } from "@/components/refuelings/RefuelingFormModal";
 import { RefuelingTable } from "@/components/refuelings/RefuelingTable";
+import { ALL_VEHICLES_VALUE, VehicleFilterSelect } from "@/components/refuelings/VehicleFilterSelect";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useRefuelings, type Refueling } from "@/hooks/useRefuelings";
 import { useToast } from "@/hooks/useToast";
@@ -18,8 +18,6 @@ import { useVehicles } from "@/hooks/useVehicles";
 import { formatDate } from "@/lib/format";
 import { findLatestOdometer } from "@/lib/refuelingCalculations";
 import type { RefuelingFormData } from "@/lib/validations/refueling";
-
-const ALL_VEHICLES_VALUE = "todos";
 
 export function RefuelingsPageContent() {
   const { refuelings, createRefueling, updateRefueling, deleteRefueling } = useRefuelings();
@@ -40,9 +38,7 @@ export function RefuelingsPageContent() {
       .filter((refueling) => {
         if (!query) return true;
         const driver = drivers.find((option) => option.id === refueling.driverId);
-        return [refueling.location ?? "", driver?.fullName ?? ""].some((field) =>
-          field.toLowerCase().includes(query)
-        );
+        return (driver?.fullName ?? "").toLowerCase().includes(query);
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [refuelings, search, vehicleFilter, drivers]);
@@ -82,37 +78,25 @@ export function RefuelingsPageContent() {
     closeForm();
   }
 
-  const vehicleFilterOptions = [
-    { value: ALL_VEHICLES_VALUE, label: "Todos os veículos" },
-    ...vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.plate} — ${vehicle.model}` })),
-  ];
-
   return (
     <div className="flex flex-1">
       <Sidebar />
 
-      <main className="flex-1 bg-gray-50 px-8 py-7">
+      <main className="min-w-0 flex-1 bg-gray-50 px-8 py-7">
         <PageHeader title="Abastecimentos" subtitle="Registre e acompanhe os abastecimentos da frota">
           <CreateButton label="Novo abastecimento" onClick={openCreateForm} />
         </PageHeader>
 
-        <div className="mb-5 flex flex-wrap items-end gap-3">
-          <div className="max-w-sm flex-1">
+        <div className="flex items-start gap-3">
+          <div className="max-w-xs flex-1">
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Buscar por posto ou motorista..."
+              placeholder="Buscar por motorista..."
               label="Buscar abastecimento"
             />
           </div>
-          <div className="w-64">
-            <Select
-              label="Veículo"
-              options={vehicleFilterOptions}
-              value={vehicleFilter}
-              onChange={(event) => setVehicleFilter(event.target.value)}
-            />
-          </div>
+          <VehicleFilterSelect vehicles={vehicles} value={vehicleFilter} onChange={setVehicleFilter} />
         </div>
 
         {filteredRefuelings.length === 0 ? (

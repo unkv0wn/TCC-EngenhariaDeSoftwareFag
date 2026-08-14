@@ -81,7 +81,7 @@ export function UnitsPageContent() {
     <div className="flex flex-1">
       <Sidebar />
 
-      <main className="flex-1 bg-gray-50 px-8 py-7">
+      <main className="min-w-0 flex-1 bg-gray-50 px-8 py-7">
         <PageHeader title="Unidades de Medida" subtitle="Gerencie as unidades de medida disponíveis para produtos">
           <CreateButton label="Nova unidade" onClick={openCreateForm} />
         </PageHeader>
