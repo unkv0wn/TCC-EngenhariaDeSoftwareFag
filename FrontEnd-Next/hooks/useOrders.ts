@@ -94,7 +94,11 @@ const VALID_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   aguardando: ["faturado", "cancelado"],
   faturado: ["em_rota", "cancelado"],
   // Uma vez em rota, a mercadoria já saiu — não é mais cancelável por aqui.
-  em_rota: ["entregue"],
+  // "faturado" aqui é o "Retorno à empresa": o motorista não conseguiu entregar (cliente
+  // ausente, endereço errado, avaria etc.) e a mercadoria volta, pronta pra ser redespachada
+  // depois, sem precisar cancelar o pedido nem reemitir nota. É uma ação do app do motorista,
+  // não aparece no painel admin (assim como "entregue").
+  em_rota: ["entregue", "faturado"],
   entregue: [],
   cancelado: [],
 };
