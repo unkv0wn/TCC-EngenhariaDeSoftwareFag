@@ -9,15 +9,20 @@ export interface StatusQuickAction {
 /**
  * Which status transitions make sense from the current one — used to build contextual quick actions.
  *
- * Rules:
- * - A order can only start its delivery route (em_rota) once it has been invoiced (faturado).
- * - "Entregue" is not settable here: the driver confirms delivery from their own app.
+ * "Faturado" é um passo real da linha do tempo do pedido (aguardando → faturado → em_rota →
+ * entregue), não um flag à parte. "Entregue" não é setável aqui: quem confirma é o motorista,
+ * pelo próprio app dele.
  */
-export function getNextStatusActions(status: OrderStatus, invoiced: boolean): StatusQuickAction[] {
+export function getNextStatusActions(status: OrderStatus): StatusQuickAction[] {
   switch (status) {
     case "aguardando":
       return [
-        ...(invoiced ? [{ label: "Iniciar rota", status: "em_rota" as const }] : []),
+        { label: "Faturar pedido", status: "faturado" },
+        { label: "Cancelar pedido", status: "cancelado", variant: "danger" },
+      ];
+    case "faturado":
+      return [
+        { label: "Iniciar rota", status: "em_rota" },
         { label: "Cancelar pedido", status: "cancelado", variant: "danger" },
       ];
     case "em_rota":

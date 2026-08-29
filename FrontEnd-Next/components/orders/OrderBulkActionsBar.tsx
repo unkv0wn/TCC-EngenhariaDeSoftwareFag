@@ -1,21 +1,19 @@
-import { Ban, Receipt, ReceiptText, Trash2, Truck, X } from "lucide-react";
+import { Ban, Receipt, Trash2, Truck, X } from "lucide-react";
 
 interface OrderBulkActionsBarProps {
   count: number;
+  onMarkFaturado: () => void;
   onMarkEmRota: () => void;
   onCancel: () => void;
-  onInvoice: () => void;
-  onUninvoice: () => void;
   onDelete: () => void;
   onClear: () => void;
 }
 
 export function OrderBulkActionsBar({
   count,
+  onMarkFaturado,
   onMarkEmRota,
   onCancel,
-  onInvoice,
-  onUninvoice,
   onDelete,
   onClear,
 }: OrderBulkActionsBarProps) {
@@ -24,10 +22,9 @@ export function OrderBulkActionsBar({
       <span className="text-xs font-bold text-primary-700">{count} selecionado{count === 1 ? "" : "s"}</span>
 
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        <BulkButton label="Faturar" icon={Receipt} onClick={onMarkFaturado} />
         <BulkButton label="Em rota" icon={Truck} onClick={onMarkEmRota} />
         <BulkButton label="Cancelar" icon={Ban} onClick={onCancel} variant="danger" />
-        <BulkButton label="Faturar" icon={Receipt} onClick={onInvoice} />
-        <BulkButton label="Desfaturar" icon={ReceiptText} onClick={onUninvoice} />
         <BulkButton label="Excluir" icon={Trash2} onClick={onDelete} variant="danger" />
         <button
           type="button"

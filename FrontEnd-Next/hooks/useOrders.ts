@@ -12,8 +12,6 @@ export interface OrderHistoryEntry {
 export interface Order extends OrderFormData {
   id: string;
   history: OrderHistoryEntry[];
-  invoiced: boolean;
-  invoicedAt: string | null;
 }
 
 function todayIsoDate(): string {
@@ -43,11 +41,10 @@ const INITIAL_ORDERS: Order[] = [
     ],
     history: [
       { status: "aguardando", changedAt: "2026-08-18T09:12:00.000Z" },
+      { status: "faturado", changedAt: "2026-08-19T13:40:00.000Z" },
       { status: "em_rota", changedAt: "2026-08-20T08:03:00.000Z" },
       { status: "entregue", changedAt: "2026-08-20T14:47:00.000Z" },
     ],
-    invoiced: true,
-    invoicedAt: "2026-08-20T15:10:00.000Z",
   },
   {
     id: "2",
@@ -64,10 +61,9 @@ const INITIAL_ORDERS: Order[] = [
     items: [{ productId: "2", quantity: 20, unitPrice: 42.5 }],
     history: [
       { status: "aguardando", changedAt: "2026-08-22T11:30:00.000Z" },
+      { status: "faturado", changedAt: "2026-08-23T10:00:00.000Z" },
       { status: "em_rota", changedAt: "2026-08-24T07:55:00.000Z" },
     ],
-    invoiced: true,
-    invoicedAt: "2026-08-23T10:00:00.000Z",
   },
   {
     id: "3",
@@ -86,26 +82,30 @@ const INITIAL_ORDERS: Order[] = [
       { productId: "5", quantity: 15, unitPrice: 2.5 },
     ],
     history: [{ status: "aguardando", changedAt: "2026-08-26T16:20:00.000Z" }],
-    invoiced: false,
-    invoicedAt: null,
   },
 ];
 
+/**
+ * Transições válidas de status — "Faturado" é um passo real da linha do tempo do pedido,
+ * não um flag à parte. Isso garante que só existam combinações que fazem sentido (ex: não dá
+ * pra estar em_rota sem antes ter passado por faturado, nem faturar duas vezes o mesmo pedido).
+ */
+const VALID_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  aguardando: ["faturado", "cancelado"],
+  faturado: ["em_rota", "cancelado"],
+  em_rota: ["entregue", "cancelado"],
+  entregue: [],
+  cancelado: [],
+};
+
 function withStatus(order: Order, status: OrderStatus): Order {
   if (order.status === status) return order;
-  // A order can only start its delivery route once it has been invoiced.
-  if (status === "em_rota" && !order.invoiced) return order;
+  if (!VALID_STATUS_TRANSITIONS[order.status].includes(status)) return order;
   return {
     ...order,
     status,
     history: [...order.history, { status, changedAt: new Date().toISOString() }],
   };
-}
-
-function withInvoiced(order: Order, invoiced: boolean): Order {
-  // Invoicing an already-invoiced order would duplicate the billing — no-op instead.
-  if (order.invoiced === invoiced) return order;
-  return { ...order, invoiced, invoicedAt: invoiced ? new Date().toISOString() : null };
 }
 
 export function useOrders() {
@@ -116,8 +116,6 @@ export function useOrders() {
       ...data,
       id: crypto.randomUUID(),
       history: [{ status: data.status, changedAt: new Date().toISOString() }],
-      invoiced: false,
-      invoicedAt: null,
     };
     setOrders((prev) => [...prev, newOrder]);
     return newOrder;
@@ -147,8 +145,6 @@ export function useOrders() {
       date: todayIsoDate(),
       status: "aguardando",
       history: [{ status: "aguardando", changedAt: new Date().toISOString() }],
-      invoiced: false,
-      invoicedAt: null,
     };
     setOrders((prev) => [...prev, duplicate]);
     return duplicate;
@@ -158,18 +154,9 @@ export function useOrders() {
     setOrders((prev) => prev.map((order) => (order.id === id ? withStatus(order, status) : order)));
   }, []);
 
-  const setInvoiced = useCallback((id: string, invoiced: boolean) => {
-    setOrders((prev) => prev.map((order) => (order.id === id ? withInvoiced(order, invoiced) : order)));
-  }, []);
-
   const bulkChangeStatus = useCallback((ids: string[], status: OrderStatus) => {
     const idSet = new Set(ids);
     setOrders((prev) => prev.map((order) => (idSet.has(order.id) ? withStatus(order, status) : order)));
-  }, []);
-
-  const bulkSetInvoiced = useCallback((ids: string[], invoiced: boolean) => {
-    const idSet = new Set(ids);
-    setOrders((prev) => prev.map((order) => (idSet.has(order.id) ? withInvoiced(order, invoiced) : order)));
   }, []);
 
   const bulkDelete = useCallback((ids: string[]) => {
@@ -184,9 +171,7 @@ export function useOrders() {
     deleteOrder,
     duplicateOrder,
     changeStatus,
-    setInvoiced,
     bulkChangeStatus,
-    bulkSetInvoiced,
     bulkDelete,
   };
 }

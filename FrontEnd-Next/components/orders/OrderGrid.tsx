@@ -19,7 +19,6 @@ interface OrderGridProps {
   onDuplicate: (order: Order) => void;
   onPrint: (order: Order) => void;
   onChangeStatus: (order: Order, status: OrderStatus) => void;
-  onToggleInvoiced: (order: Order) => void;
 }
 
 export function OrderGrid({
@@ -35,7 +34,6 @@ export function OrderGrid({
   onDuplicate,
   onPrint,
   onChangeStatus,
-  onToggleInvoiced,
 }: OrderGridProps) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -54,7 +52,6 @@ export function OrderGrid({
           onDuplicate={onDuplicate}
           onPrint={onPrint}
           onChangeStatus={onChangeStatus}
-          onToggleInvoiced={onToggleInvoiced}
         />
       ))}
     </div>

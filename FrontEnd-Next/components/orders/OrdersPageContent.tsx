@@ -35,9 +35,7 @@ export function OrdersPageContent() {
     deleteOrder,
     duplicateOrder,
     changeStatus,
-    setInvoiced,
     bulkChangeStatus,
-    bulkSetInvoiced,
     bulkDelete,
   } = useOrders();
   const { customers } = useCustomers();
@@ -124,11 +122,6 @@ export function OrdersPageContent() {
     success("Status atualizado", `O pedido de ${customers.find((c) => c.id === order.customerId)?.name ?? "cliente"} agora está ${STATUS_TOAST_LABEL[status]}.`);
   }
 
-  function handleToggleInvoiced(order: Order) {
-    setInvoiced(order.id, !order.invoiced);
-    success(order.invoiced ? "Faturamento desfeito" : "Pedido faturado", order.invoiced ? "O pedido voltou a não faturado." : "O pedido foi marcado como faturado.");
-  }
-
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -151,20 +144,19 @@ export function OrdersPageContent() {
 
   function handleBulkStatus(status: OrderStatus) {
     const selected = orders.filter((order) => selectedIds.has(order.id));
-    // Mirror the guards from useOrders so the toast reports what will actually happen:
-    // a route can only start once invoiced, and only orders still in progress can be cancelled.
-    const eligible =
-      status === "em_rota"
-        ? selected.filter((order) => order.status === "aguardando" && order.invoiced)
-        : selected.filter((order) => order.status === "aguardando" || order.status === "em_rota");
+    // Mirror the state machine from useOrders (VALID_STATUS_TRANSITIONS) so the toast reports
+    // what will actually happen instead of silently no-op'ing on ineligible orders.
+    const eligible = selected.filter((order) => VALID_BULK_ORIGINS[status].includes(order.status));
     const skipped = selected.length - eligible.length;
 
     if (eligible.length === 0) {
       success(
         "Nenhum pedido atualizado",
-        status === "em_rota"
-          ? "Os pedidos selecionados ainda não estão faturados."
-          : "Nenhum pedido selecionado pode receber essa alteração."
+        status === "faturado"
+          ? "Os pedidos selecionados não estão aguardando faturamento."
+          : status === "em_rota"
+            ? "Os pedidos selecionados ainda não estão faturados."
+            : "Nenhum pedido selecionado pode receber essa alteração."
       );
       return;
     }
@@ -174,28 +166,6 @@ export function OrdersPageContent() {
       "Status atualizado",
       `${eligible.length} pedido(s) marcado(s) como ${STATUS_TOAST_LABEL[status]}.` +
         (skipped > 0 ? ` ${skipped} pedido(s) ignorado(s) por não atenderem às regras de transição.` : "")
-    );
-    clearSelection();
-  }
-
-  function handleBulkInvoice(invoiced: boolean) {
-    const selected = orders.filter((order) => selectedIds.has(order.id));
-    // Skip orders already in the target billing state to avoid duplicating the invoice.
-    const eligible = selected.filter((order) => order.invoiced !== invoiced);
-    const skipped = selected.length - eligible.length;
-
-    if (eligible.length === 0) {
-      success(
-        "Nenhum pedido atualizado",
-        invoiced ? "Os pedidos selecionados já estão faturados." : "Os pedidos selecionados já não estão faturados."
-      );
-      return;
-    }
-
-    bulkSetInvoiced(eligible.map((order) => order.id), invoiced);
-    success(
-      invoiced ? "Pedidos faturados" : "Faturamento desfeito",
-      `${eligible.length} pedido(s) atualizado(s).` + (skipped > 0 ? ` ${skipped} pedido(s) ignorado(s) — já estavam nesse estado.` : "")
     );
     clearSelection();
   }
@@ -235,10 +205,9 @@ export function OrdersPageContent() {
           {selectedIds.size > 0 && (
             <OrderBulkActionsBar
               count={selectedIds.size}
+              onMarkFaturado={() => handleBulkStatus("faturado")}
               onMarkEmRota={() => handleBulkStatus("em_rota")}
               onCancel={() => handleBulkStatus("cancelado")}
-              onInvoice={() => handleBulkInvoice(true)}
-              onUninvoice={() => handleBulkInvoice(false)}
               onDelete={() => setIsBulkDeleteOpen(true)}
               onClear={clearSelection}
             />
@@ -262,7 +231,6 @@ export function OrdersPageContent() {
               onDuplicate={handleDuplicate}
               onPrint={setOrderToPrint}
               onChangeStatus={handleChangeStatus}
-              onToggleInvoiced={handleToggleInvoiced}
             />
           ) : (
             <OrderTable
@@ -279,7 +247,6 @@ export function OrdersPageContent() {
               onDuplicate={handleDuplicate}
               onPrint={setOrderToPrint}
               onChangeStatus={handleChangeStatus}
-              onToggleInvoiced={handleToggleInvoiced}
             />
           )}
         </main>
@@ -355,7 +322,17 @@ export function OrdersPageContent() {
 
 const STATUS_TOAST_LABEL: Record<OrderStatus, string> = {
   aguardando: "aguardando",
+  faturado: "faturado",
   em_rota: "em rota",
   entregue: "entregue",
   cancelado: "cancelado",
+};
+
+/** Quais status de origem uma ação em massa aceita para cada status de destino (espelha useOrders). */
+const VALID_BULK_ORIGINS: Record<OrderStatus, OrderStatus[]> = {
+  aguardando: [],
+  faturado: ["aguardando"],
+  em_rota: ["faturado"],
+  entregue: [],
+  cancelado: ["aguardando", "faturado", "em_rota"],
 };

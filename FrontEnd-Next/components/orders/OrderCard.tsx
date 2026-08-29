@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CheckCircle2, Copy, Pencil, Printer, Receipt, ReceiptText, Trash2, Truck, type LucideIcon } from "lucide-react";
+import { Ban, CheckCircle2, Copy, Pencil, Printer, Receipt, Trash2, Truck, type LucideIcon } from "lucide-react";
 
 import { ActionsMenu, type ActionMenuItem } from "@/components/ui/ActionsMenu";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { ORDER_STATUSES, type OrderStatus } from "@/lib/validations/order";
 
 const STATUS_BADGE_STYLES: Record<OrderStatus, string> = {
   aguardando: "bg-gray-100 text-gray-500",
+  faturado: "bg-primary-50 text-primary-700",
   em_rota: "bg-primary-50 text-primary-700",
   entregue: "bg-success-50 text-success-700",
   cancelado: "bg-danger-50 text-danger-600",
@@ -23,6 +24,7 @@ const STATUS_BADGE_STYLES: Record<OrderStatus, string> = {
 
 const STATUS_TO_ICON: Record<OrderStatus, LucideIcon> = {
   aguardando: Receipt,
+  faturado: Receipt,
   em_rota: Truck,
   entregue: CheckCircle2,
   cancelado: Ban,
@@ -41,7 +43,6 @@ interface OrderCardProps {
   onDuplicate: (order: Order) => void;
   onPrint: (order: Order) => void;
   onChangeStatus: (order: Order, status: OrderStatus) => void;
-  onToggleInvoiced: (order: Order) => void;
 }
 
 export function OrderCard({
@@ -57,7 +58,6 @@ export function OrderCard({
   onDuplicate,
   onPrint,
   onChangeStatus,
-  onToggleInvoiced,
 }: OrderCardProps) {
   const customer = customers.find((option) => option.id === order.customerId);
   const vehicle = vehicles.find((option) => option.id === order.vehicleId);
@@ -66,19 +66,12 @@ export function OrderCard({
   const statusLabel = ORDER_STATUSES.find((option) => option.value === order.status)?.label;
   const itemCount = order.items.length;
 
-  const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status, order.invoiced).map((action) => ({
+  const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status).map((action) => ({
     label: action.label,
     icon: STATUS_TO_ICON[action.status],
     onClick: () => onChangeStatus(order, action.status),
     variant: action.variant,
   }));
-  const invoiceGroup: ActionMenuItem[] = [
-    {
-      label: order.invoiced ? "Desfazer faturamento" : "Faturar pedido",
-      icon: order.invoiced ? ReceiptText : Receipt,
-      onClick: () => onToggleInvoiced(order),
-    },
-  ];
   const utilityGroup: ActionMenuItem[] = [
     { label: "Imprimir", icon: Printer, onClick: () => onPrint(order) },
     { label: "Duplicar", icon: Copy, onClick: () => onDuplicate(order) },
@@ -107,7 +100,7 @@ export function OrderCard({
       <div className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-100">
         <ActionsMenu
           ariaLabel={`Ações do pedido de ${customer?.name ?? "cliente"}`}
-          groups={[statusGroup, invoiceGroup, utilityGroup]}
+          groups={[statusGroup, utilityGroup]}
         />
       </div>
 
@@ -124,12 +117,7 @@ export function OrderCard({
             {itemCount} {itemCount === 1 ? "item" : "itens"} &middot; {vehicle ? vehicle.plate : "—"} &middot;{" "}
             {driver?.fullName ?? "—"}
           </p>
-          <p>
-            {paymentMethod?.name ?? "—"} &middot;{" "}
-            <span className={order.invoiced ? "text-success-700" : "text-gray-400"}>
-              {order.invoiced ? "Faturado" : "Não faturado"}
-            </span>
-          </p>
+          <p>{paymentMethod?.name ?? "—"}</p>
         </div>
         <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-[11.5px] font-semibold text-gray-500">
           <span>Total</span>

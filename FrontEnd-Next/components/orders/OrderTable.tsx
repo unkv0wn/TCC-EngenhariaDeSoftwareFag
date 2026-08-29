@@ -1,4 +1,4 @@
-import { Ban, CheckCircle2, Copy, Pencil, Printer, Receipt, ReceiptText, Trash2, Truck } from "lucide-react";
+import { Ban, CheckCircle2, Copy, Pencil, Printer, Receipt, Trash2, Truck } from "lucide-react";
 
 import { ActionsMenu, type ActionMenuItem } from "@/components/ui/ActionsMenu";
 import { cn } from "@/lib/utils";
@@ -12,22 +12,11 @@ import { calculateOrderTotal } from "@/lib/orderCalculations";
 import { getNextStatusActions } from "@/lib/orderStatusActions";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/validations/order";
 
-const TABLE_HEADINGS = [
-  "",
-  "Data",
-  "Cliente",
-  "Itens",
-  "Veículo",
-  "Motorista",
-  "Pagamento",
-  "Total",
-  "Status",
-  "Faturamento",
-  "",
-];
+const TABLE_HEADINGS = ["", "Data", "Cliente", "Itens", "Veículo", "Motorista", "Pagamento", "Total", "Status", ""];
 
 const STATUS_BADGE_STYLES: Record<OrderStatus, string> = {
   aguardando: "bg-gray-100 text-gray-500",
+  faturado: "bg-primary-50 text-primary-700",
   em_rota: "bg-primary-50 text-primary-700",
   entregue: "bg-success-50 text-success-700",
   cancelado: "bg-danger-50 text-danger-600",
@@ -39,6 +28,7 @@ const STATUS_LABELS: Record<OrderStatus, string> = Object.fromEntries(
 
 const STATUS_ICONS: Record<OrderStatus, typeof Truck> = {
   aguardando: Receipt,
+  faturado: Receipt,
   em_rota: Truck,
   entregue: CheckCircle2,
   cancelado: Ban,
@@ -58,7 +48,6 @@ interface OrderTableProps {
   onDuplicate: (order: Order) => void;
   onPrint: (order: Order) => void;
   onChangeStatus: (order: Order, status: OrderStatus) => void;
-  onToggleInvoiced: (order: Order) => void;
 }
 
 export function OrderTable({
@@ -75,7 +64,6 @@ export function OrderTable({
   onDuplicate,
   onPrint,
   onChangeStatus,
-  onToggleInvoiced,
 }: OrderTableProps) {
   const allSelected = orders.length > 0 && orders.every((order) => selectedIds.has(order.id));
 
@@ -112,19 +100,12 @@ export function OrderTable({
             const paymentMethod = paymentMethods.find((option) => option.id === order.paymentMethodId);
             const itemCount = order.items.length;
 
-            const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status, order.invoiced).map((action) => ({
+            const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status).map((action) => ({
               label: action.label,
               icon: STATUS_ICONS[action.status],
               onClick: () => onChangeStatus(order, action.status),
               variant: action.variant,
             }));
-            const invoiceGroup: ActionMenuItem[] = [
-              {
-                label: order.invoiced ? "Desfazer faturamento" : "Faturar pedido",
-                icon: order.invoiced ? ReceiptText : Receipt,
-                onClick: () => onToggleInvoiced(order),
-              },
-            ];
             const utilityGroup: ActionMenuItem[] = [
               { label: "Imprimir", icon: Printer, onClick: () => onPrint(order) },
               { label: "Duplicar", icon: Copy, onClick: () => onDuplicate(order) },
@@ -170,20 +151,10 @@ export function OrderTable({
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3">
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-bold",
-                      order.invoiced ? "bg-success-50 text-success-700" : "bg-gray-100 text-gray-500"
-                    )}
-                  >
-                    {order.invoiced ? "Faturado" : "Não faturado"}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap px-3.5 py-3">
                   <div className="flex justify-end">
                     <ActionsMenu
                       ariaLabel={`Ações do pedido de ${customer?.name ?? "cliente"}`}
-                      groups={[statusGroup, invoiceGroup, utilityGroup]}
+                      groups={[statusGroup, utilityGroup]}
                     />
                   </div>
                 </td>
