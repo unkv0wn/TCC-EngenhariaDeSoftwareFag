@@ -26,7 +26,8 @@ export function getNextStatusActions(status: OrderStatus): StatusQuickAction[] {
         { label: "Cancelar pedido", status: "cancelado", variant: "danger" },
       ];
     case "em_rota":
-      return [{ label: "Cancelar pedido", status: "cancelado", variant: "danger" }];
+      // Já saiu para entrega — não cancela mais por aqui; quem confirma a entrega é o motorista.
+      return [];
     case "entregue":
     case "cancelado":
       return [];

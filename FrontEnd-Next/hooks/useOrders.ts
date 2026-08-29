@@ -93,7 +93,8 @@ const INITIAL_ORDERS: Order[] = [
 const VALID_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   aguardando: ["faturado", "cancelado"],
   faturado: ["em_rota", "cancelado"],
-  em_rota: ["entregue", "cancelado"],
+  // Uma vez em rota, a mercadoria já saiu — não é mais cancelável por aqui.
+  em_rota: ["entregue"],
   entregue: [],
   cancelado: [],
 };

@@ -334,5 +334,6 @@ const VALID_BULK_ORIGINS: Record<OrderStatus, OrderStatus[]> = {
   faturado: ["aguardando"],
   em_rota: ["faturado"],
   entregue: [],
-  cancelado: ["aguardando", "faturado", "em_rota"],
+  // Pedido em rota já saiu para entrega — não é mais cancelável por aqui.
+  cancelado: ["aguardando", "faturado"],
 };
