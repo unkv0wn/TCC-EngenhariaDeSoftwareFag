@@ -2,16 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  Car,
-  ChevronDown,
-  FolderOpen,
-  LayoutDashboard,
-  LogOut,
-  Route as RouteIcon,
-  Settings,
-} from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { Car, ChevronDown, LayoutDashboard, LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_GROUPS = [
@@ -23,13 +15,6 @@ const NAV_GROUPS = [
     label: "Cadastros",
     items: [{ href: "/dashboard/veiculos", label: "Veículos", icon: Car }],
   },
-  {
-    label: "Rotas",
-    items: [
-      { label: "Nova rota", icon: RouteIcon },
-      { label: "Minhas rotas", icon: FolderOpen },
-    ],
-  },
 ] as const;
 
 function NavItem({
@@ -38,12 +23,14 @@ function NavItem({
   href,
   active,
   variant = "default",
+  onClick,
 }: {
   icon: typeof LayoutDashboard;
   label: string;
   href?: string;
   active?: boolean;
   variant?: "default" | "danger";
+  onClick?: () => void;
 }) {
   const className = cn(
     "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors",
@@ -70,7 +57,7 @@ function NavItem({
   }
 
   return (
-    <button type="button" className={cn(className, "w-full text-left")}>
+    <button type="button" onClick={onClick} className={cn(className, "w-full text-left")}>
       {content}
     </button>
   );
@@ -108,6 +95,12 @@ function NavGroup({ label, items, pathname }: (typeof NAV_GROUPS)[number] & { pa
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/logout", { method: "POST" });
+    router.push("/login");
+  }
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-gray-100 bg-white px-[18px] py-[22px]">
@@ -125,7 +118,7 @@ export function Sidebar() {
       <div className="mt-auto pt-3">
         <div className="mb-2 border-t border-gray-100" />
         <NavItem icon={Settings} label="Configurações" />
-        <NavItem icon={LogOut} label="Sair" variant="danger" />
+        <NavItem icon={LogOut} label="Sair" variant="danger" onClick={handleLogout} />
       </div>
     </aside>
   );
