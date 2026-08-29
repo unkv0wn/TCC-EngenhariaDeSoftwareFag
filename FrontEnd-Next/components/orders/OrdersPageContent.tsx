@@ -150,16 +150,53 @@ export function OrdersPageContent() {
   }
 
   function handleBulkStatus(status: OrderStatus) {
-    const ids = Array.from(selectedIds);
-    bulkChangeStatus(ids, status);
-    success("Status atualizado", `${ids.length} pedido(s) marcado(s) como ${STATUS_TOAST_LABEL[status]}.`);
+    const selected = orders.filter((order) => selectedIds.has(order.id));
+    // Mirror the guards from useOrders so the toast reports what will actually happen:
+    // a route can only start once invoiced, and only orders still in progress can be cancelled.
+    const eligible =
+      status === "em_rota"
+        ? selected.filter((order) => order.status === "aguardando" && order.invoiced)
+        : selected.filter((order) => order.status === "aguardando" || order.status === "em_rota");
+    const skipped = selected.length - eligible.length;
+
+    if (eligible.length === 0) {
+      success(
+        "Nenhum pedido atualizado",
+        status === "em_rota"
+          ? "Os pedidos selecionados ainda não estão faturados."
+          : "Nenhum pedido selecionado pode receber essa alteração."
+      );
+      return;
+    }
+
+    bulkChangeStatus(eligible.map((order) => order.id), status);
+    success(
+      "Status atualizado",
+      `${eligible.length} pedido(s) marcado(s) como ${STATUS_TOAST_LABEL[status]}.` +
+        (skipped > 0 ? ` ${skipped} pedido(s) ignorado(s) por não atenderem às regras de transição.` : "")
+    );
     clearSelection();
   }
 
   function handleBulkInvoice(invoiced: boolean) {
-    const ids = Array.from(selectedIds);
-    bulkSetInvoiced(ids, invoiced);
-    success(invoiced ? "Pedidos faturados" : "Faturamento desfeito", `${ids.length} pedido(s) atualizado(s).`);
+    const selected = orders.filter((order) => selectedIds.has(order.id));
+    // Skip orders already in the target billing state to avoid duplicating the invoice.
+    const eligible = selected.filter((order) => order.invoiced !== invoiced);
+    const skipped = selected.length - eligible.length;
+
+    if (eligible.length === 0) {
+      success(
+        "Nenhum pedido atualizado",
+        invoiced ? "Os pedidos selecionados já estão faturados." : "Os pedidos selecionados já não estão faturados."
+      );
+      return;
+    }
+
+    bulkSetInvoiced(eligible.map((order) => order.id), invoiced);
+    success(
+      invoiced ? "Pedidos faturados" : "Faturamento desfeito",
+      `${eligible.length} pedido(s) atualizado(s).` + (skipped > 0 ? ` ${skipped} pedido(s) ignorado(s) — já estavam nesse estado.` : "")
+    );
     clearSelection();
   }
 
@@ -199,7 +236,6 @@ export function OrdersPageContent() {
             <OrderBulkActionsBar
               count={selectedIds.size}
               onMarkEmRota={() => handleBulkStatus("em_rota")}
-              onMarkEntregue={() => handleBulkStatus("entregue")}
               onCancel={() => handleBulkStatus("cancelado")}
               onInvoice={() => handleBulkInvoice(true)}
               onUninvoice={() => handleBulkInvoice(false)}

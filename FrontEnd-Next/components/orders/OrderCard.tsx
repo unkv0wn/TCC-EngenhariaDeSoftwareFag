@@ -66,7 +66,7 @@ export function OrderCard({
   const statusLabel = ORDER_STATUSES.find((option) => option.value === order.status)?.label;
   const itemCount = order.items.length;
 
-  const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status).map((action) => ({
+  const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status, order.invoiced).map((action) => ({
     label: action.label,
     icon: STATUS_TO_ICON[action.status],
     onClick: () => onChangeStatus(order, action.status),

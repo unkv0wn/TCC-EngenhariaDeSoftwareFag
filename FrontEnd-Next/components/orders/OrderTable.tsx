@@ -112,7 +112,7 @@ export function OrderTable({
             const paymentMethod = paymentMethods.find((option) => option.id === order.paymentMethodId);
             const itemCount = order.items.length;
 
-            const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status).map((action) => ({
+            const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status, order.invoiced).map((action) => ({
               label: action.label,
               icon: STATUS_ICONS[action.status],
               onClick: () => onChangeStatus(order, action.status),

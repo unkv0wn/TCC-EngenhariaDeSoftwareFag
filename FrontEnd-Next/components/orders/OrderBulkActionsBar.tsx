@@ -1,9 +1,8 @@
-import { Ban, CheckCircle2, Receipt, ReceiptText, Trash2, Truck, X } from "lucide-react";
+import { Ban, Receipt, ReceiptText, Trash2, Truck, X } from "lucide-react";
 
 interface OrderBulkActionsBarProps {
   count: number;
   onMarkEmRota: () => void;
-  onMarkEntregue: () => void;
   onCancel: () => void;
   onInvoice: () => void;
   onUninvoice: () => void;
@@ -14,7 +13,6 @@ interface OrderBulkActionsBarProps {
 export function OrderBulkActionsBar({
   count,
   onMarkEmRota,
-  onMarkEntregue,
   onCancel,
   onInvoice,
   onUninvoice,
@@ -27,7 +25,6 @@ export function OrderBulkActionsBar({
 
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
         <BulkButton label="Em rota" icon={Truck} onClick={onMarkEmRota} />
-        <BulkButton label="Entregue" icon={CheckCircle2} onClick={onMarkEntregue} />
         <BulkButton label="Cancelar" icon={Ban} onClick={onCancel} variant="danger" />
         <BulkButton label="Faturar" icon={Receipt} onClick={onInvoice} />
         <BulkButton label="Desfaturar" icon={ReceiptText} onClick={onUninvoice} />

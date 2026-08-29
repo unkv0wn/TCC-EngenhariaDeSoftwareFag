@@ -93,6 +93,8 @@ const INITIAL_ORDERS: Order[] = [
 
 function withStatus(order: Order, status: OrderStatus): Order {
   if (order.status === status) return order;
+  // A order can only start its delivery route once it has been invoiced.
+  if (status === "em_rota" && !order.invoiced) return order;
   return {
     ...order,
     status,
@@ -101,6 +103,8 @@ function withStatus(order: Order, status: OrderStatus): Order {
 }
 
 function withInvoiced(order: Order, invoiced: boolean): Order {
+  // Invoicing an already-invoiced order would duplicate the billing — no-op instead.
+  if (order.invoiced === invoiced) return order;
   return { ...order, invoiced, invoicedAt: invoiced ? new Date().toISOString() : null };
 }
 
