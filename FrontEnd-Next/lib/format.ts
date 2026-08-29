@@ -26,6 +26,14 @@ export function formatDate(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString("pt-BR");
 }
 
+/** @param isoDateTime a full ISO datetime string, e.g. from `new Date().toISOString()` */
+export function formatDateTime(isoDateTime: string): string {
+  return new Date(isoDateTime).toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
 export function formatPhone(value: string): string {
   const digits = value.replace(/\D/g, "");
 

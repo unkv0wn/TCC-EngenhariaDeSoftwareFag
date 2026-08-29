@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -12,6 +12,7 @@ import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
 import { OrderDateRangeFilter } from "@/components/orders/OrderDateRangeFilter";
 import { OrderFormModal } from "@/components/orders/OrderFormModal";
 import { OrderGrid } from "@/components/orders/OrderGrid";
+import { OrderPrintView } from "@/components/orders/OrderPrintView";
 import { ALL_STATUSES_VALUE, OrderStatusFilter } from "@/components/orders/OrderStatusFilter";
 import { OrderTable } from "@/components/orders/OrderTable";
 import { useCustomers } from "@/hooks/useCustomers";
@@ -26,7 +27,7 @@ import { formatDate } from "@/lib/format";
 import type { OrderFormData } from "@/lib/validations/order";
 
 export function OrdersPageContent() {
-  const { orders, createOrder, updateOrder, deleteOrder } = useOrders();
+  const { orders, createOrder, updateOrder, deleteOrder, duplicateOrder } = useOrders();
   const { customers } = useCustomers();
   const { vehicles } = useVehicles();
   const { drivers } = useDrivers();
@@ -43,6 +44,17 @@ export function OrdersPageContent() {
   const [formOrder, setFormOrder] = useState<Order | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+  const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
+
+  useEffect(() => {
+    if (!orderToPrint) return;
+    function handleAfterPrint() {
+      setOrderToPrint(null);
+    }
+    window.addEventListener("afterprint", handleAfterPrint);
+    window.print();
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, [orderToPrint]);
 
   const hasActiveFilters = !!search || statusFilter !== ALL_STATUSES_VALUE || !!dateFrom || !!dateTo;
 
@@ -87,8 +99,15 @@ export function OrdersPageContent() {
     closeForm();
   }
 
+  function handleDuplicate(order: Order) {
+    const duplicate = duplicateOrder(order);
+    success("Pedido duplicado", "Uma cópia foi criada como novo pedido — revise antes de salvar.");
+    openEditForm(duplicate);
+  }
+
   return (
-    <div className="flex flex-1">
+    <>
+    <div className="flex flex-1 print:hidden">
       <Sidebar />
 
       <main className="min-w-0 flex-1 bg-gray-50 px-8 py-7">
@@ -123,6 +142,8 @@ export function OrdersPageContent() {
             paymentMethods={paymentMethods}
             onEdit={openEditForm}
             onDelete={setOrderToDelete}
+            onDuplicate={handleDuplicate}
+            onPrint={setOrderToPrint}
           />
         ) : (
           <OrderTable
@@ -133,6 +154,8 @@ export function OrdersPageContent() {
             paymentMethods={paymentMethods}
             onEdit={openEditForm}
             onDelete={setOrderToDelete}
+            onDuplicate={handleDuplicate}
+            onPrint={setOrderToPrint}
           />
         )}
       </main>
@@ -173,5 +196,20 @@ export function OrdersPageContent() {
         />
       )}
     </div>
+
+    {orderToPrint && (
+      <div className="hidden print:block">
+        <OrderPrintView
+          order={orderToPrint}
+          customers={customers}
+          vehicles={vehicles}
+          drivers={drivers}
+          products={products}
+          paymentMethods={paymentMethods}
+          paymentConditions={paymentConditions}
+        />
+      </div>
+    )}
+    </>
   );
 }

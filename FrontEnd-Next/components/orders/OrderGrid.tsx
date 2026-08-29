@@ -13,9 +13,21 @@ interface OrderGridProps {
   paymentMethods: PaymentMethod[];
   onEdit: (order: Order) => void;
   onDelete: (order: Order) => void;
+  onDuplicate: (order: Order) => void;
+  onPrint: (order: Order) => void;
 }
 
-export function OrderGrid({ orders, customers, vehicles, drivers, paymentMethods, onEdit, onDelete }: OrderGridProps) {
+export function OrderGrid({
+  orders,
+  customers,
+  vehicles,
+  drivers,
+  paymentMethods,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onPrint,
+}: OrderGridProps) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {orders.map((order) => (
@@ -28,6 +40,8 @@ export function OrderGrid({ orders, customers, vehicles, drivers, paymentMethods
           paymentMethods={paymentMethods}
           onEdit={onEdit}
           onDelete={onDelete}
+          onDuplicate={onDuplicate}
+          onPrint={onPrint}
         />
       ))}
     </div>
