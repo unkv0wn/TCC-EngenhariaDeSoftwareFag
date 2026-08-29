@@ -12,13 +12,15 @@ export interface ActionMenuItem {
 }
 
 interface ActionsMenuProps {
-  actions: ActionMenuItem[];
+  /** Groups of actions, rendered with a divider between each group. */
+  groups: ActionMenuItem[][];
   ariaLabel: string;
 }
 
-export function ActionsMenu({ actions, ariaLabel }: ActionsMenuProps) {
+export function ActionsMenu({ groups, ariaLabel }: ActionsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const nonEmptyGroups = groups.filter((group) => group.length > 0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -59,30 +61,36 @@ export function ActionsMenu({ actions, ariaLabel }: ActionsMenuProps) {
       {isOpen && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-10 mt-1 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute right-0 top-full z-10 mt-1 w-48 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
         >
-          {actions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.label}
-                type="button"
-                role="menuitem"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsOpen(false);
-                  action.onClick();
-                }}
-                className={cn(
-                  "flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold",
-                  action.variant === "danger" ? "text-danger-600 hover:bg-danger-50" : "text-gray-600 hover:bg-gray-50"
-                )}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                {action.label}
-              </button>
-            );
-          })}
+          {nonEmptyGroups.map((group, groupIndex) => (
+            <div key={groupIndex} className={groupIndex > 0 ? "border-t border-gray-100 py-1" : undefined}>
+              {group.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.label}
+                    type="button"
+                    role="menuitem"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIsOpen(false);
+                      action.onClick();
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold",
+                      action.variant === "danger"
+                        ? "text-danger-600 hover:bg-danger-50"
+                        : "text-gray-600 hover:bg-gray-50"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>

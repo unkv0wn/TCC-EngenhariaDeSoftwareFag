@@ -12,6 +12,8 @@ export interface OrderHistoryEntry {
 export interface Order extends OrderFormData {
   id: string;
   history: OrderHistoryEntry[];
+  invoiced: boolean;
+  invoicedAt: string | null;
 }
 
 function todayIsoDate(): string {
@@ -44,6 +46,8 @@ const INITIAL_ORDERS: Order[] = [
       { status: "em_rota", changedAt: "2026-08-20T08:03:00.000Z" },
       { status: "entregue", changedAt: "2026-08-20T14:47:00.000Z" },
     ],
+    invoiced: true,
+    invoicedAt: "2026-08-20T15:10:00.000Z",
   },
   {
     id: "2",
@@ -62,6 +66,8 @@ const INITIAL_ORDERS: Order[] = [
       { status: "aguardando", changedAt: "2026-08-22T11:30:00.000Z" },
       { status: "em_rota", changedAt: "2026-08-24T07:55:00.000Z" },
     ],
+    invoiced: true,
+    invoicedAt: "2026-08-23T10:00:00.000Z",
   },
   {
     id: "3",
@@ -80,8 +86,23 @@ const INITIAL_ORDERS: Order[] = [
       { productId: "5", quantity: 15, unitPrice: 2.5 },
     ],
     history: [{ status: "aguardando", changedAt: "2026-08-26T16:20:00.000Z" }],
+    invoiced: false,
+    invoicedAt: null,
   },
 ];
+
+function withStatus(order: Order, status: OrderStatus): Order {
+  if (order.status === status) return order;
+  return {
+    ...order,
+    status,
+    history: [...order.history, { status, changedAt: new Date().toISOString() }],
+  };
+}
+
+function withInvoiced(order: Order, invoiced: boolean): Order {
+  return { ...order, invoiced, invoicedAt: invoiced ? new Date().toISOString() : null };
+}
 
 export function useOrders() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
@@ -91,6 +112,8 @@ export function useOrders() {
       ...data,
       id: crypto.randomUUID(),
       history: [{ status: data.status, changedAt: new Date().toISOString() }],
+      invoiced: false,
+      invoicedAt: null,
     };
     setOrders((prev) => [...prev, newOrder]);
     return newOrder;
@@ -104,7 +127,7 @@ export function useOrders() {
         const history = statusChanged
           ? [...order.history, { status: data.status, changedAt: new Date().toISOString() }]
           : order.history;
-        return { ...data, id, history };
+        return { ...order, ...data, id, history };
       })
     );
   }, []);
@@ -120,10 +143,46 @@ export function useOrders() {
       date: todayIsoDate(),
       status: "aguardando",
       history: [{ status: "aguardando", changedAt: new Date().toISOString() }],
+      invoiced: false,
+      invoicedAt: null,
     };
     setOrders((prev) => [...prev, duplicate]);
     return duplicate;
   }, []);
 
-  return { orders, createOrder, updateOrder, deleteOrder, duplicateOrder };
+  const changeStatus = useCallback((id: string, status: OrderStatus) => {
+    setOrders((prev) => prev.map((order) => (order.id === id ? withStatus(order, status) : order)));
+  }, []);
+
+  const setInvoiced = useCallback((id: string, invoiced: boolean) => {
+    setOrders((prev) => prev.map((order) => (order.id === id ? withInvoiced(order, invoiced) : order)));
+  }, []);
+
+  const bulkChangeStatus = useCallback((ids: string[], status: OrderStatus) => {
+    const idSet = new Set(ids);
+    setOrders((prev) => prev.map((order) => (idSet.has(order.id) ? withStatus(order, status) : order)));
+  }, []);
+
+  const bulkSetInvoiced = useCallback((ids: string[], invoiced: boolean) => {
+    const idSet = new Set(ids);
+    setOrders((prev) => prev.map((order) => (idSet.has(order.id) ? withInvoiced(order, invoiced) : order)));
+  }, []);
+
+  const bulkDelete = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setOrders((prev) => prev.filter((order) => !idSet.has(order.id)));
+  }, []);
+
+  return {
+    orders,
+    createOrder,
+    updateOrder,
+    deleteOrder,
+    duplicateOrder,
+    changeStatus,
+    setInvoiced,
+    bulkChangeStatus,
+    bulkSetInvoiced,
+    bulkDelete,
+  };
 }

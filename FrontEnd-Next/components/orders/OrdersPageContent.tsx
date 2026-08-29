@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
+import { OrderBulkActionsBar } from "@/components/orders/OrderBulkActionsBar";
 import { OrderDateRangeFilter } from "@/components/orders/OrderDateRangeFilter";
 import { OrderFormModal } from "@/components/orders/OrderFormModal";
 import { OrderGrid } from "@/components/orders/OrderGrid";
@@ -24,10 +25,21 @@ import { useProducts } from "@/hooks/useProducts";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { formatDate } from "@/lib/format";
-import type { OrderFormData } from "@/lib/validations/order";
+import type { OrderFormData, OrderStatus } from "@/lib/validations/order";
 
 export function OrdersPageContent() {
-  const { orders, createOrder, updateOrder, deleteOrder, duplicateOrder } = useOrders();
+  const {
+    orders,
+    createOrder,
+    updateOrder,
+    deleteOrder,
+    duplicateOrder,
+    changeStatus,
+    setInvoiced,
+    bulkChangeStatus,
+    bulkSetInvoiced,
+    bulkDelete,
+  } = useOrders();
   const { customers } = useCustomers();
   const { vehicles } = useVehicles();
   const { drivers } = useDrivers();
@@ -45,6 +57,8 @@ export function OrdersPageContent() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (!orderToPrint) return;
@@ -105,111 +119,207 @@ export function OrdersPageContent() {
     openEditForm(duplicate);
   }
 
+  function handleChangeStatus(order: Order, status: OrderStatus) {
+    changeStatus(order.id, status);
+    success("Status atualizado", `O pedido de ${customers.find((c) => c.id === order.customerId)?.name ?? "cliente"} agora está ${STATUS_TOAST_LABEL[status]}.`);
+  }
+
+  function handleToggleInvoiced(order: Order) {
+    setInvoiced(order.id, !order.invoiced);
+    success(order.invoiced ? "Faturamento desfeito" : "Pedido faturado", order.invoiced ? "O pedido voltou a não faturado." : "O pedido foi marcado como faturado.");
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const allSelected = filteredOrders.length > 0 && filteredOrders.every((order) => prev.has(order.id));
+      return allSelected ? new Set() : new Set(filteredOrders.map((order) => order.id));
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  function handleBulkStatus(status: OrderStatus) {
+    const ids = Array.from(selectedIds);
+    bulkChangeStatus(ids, status);
+    success("Status atualizado", `${ids.length} pedido(s) marcado(s) como ${STATUS_TOAST_LABEL[status]}.`);
+    clearSelection();
+  }
+
+  function handleBulkInvoice(invoiced: boolean) {
+    const ids = Array.from(selectedIds);
+    bulkSetInvoiced(ids, invoiced);
+    success(invoiced ? "Pedidos faturados" : "Faturamento desfeito", `${ids.length} pedido(s) atualizado(s).`);
+    clearSelection();
+  }
+
+  function handleBulkDelete() {
+    const ids = Array.from(selectedIds);
+    bulkDelete(ids);
+    success("Pedidos excluídos", `${ids.length} pedido(s) removido(s).`);
+    clearSelection();
+    setIsBulkDeleteOpen(false);
+  }
+
   return (
     <>
-    <div className="flex flex-1 print:hidden">
-      <Sidebar />
+      <div className="flex flex-1 print:hidden">
+        <Sidebar />
 
-      <main className="min-w-0 flex-1 bg-gray-50 px-8 py-7">
-        <PageHeader title="Pedidos" subtitle="Gerencie os pedidos de entrega dos seus clientes">
-          <ViewToggle view={view} onChange={setView} />
-          <CreateButton label="Novo pedido" onClick={openCreateForm} />
-        </PageHeader>
+        <main className="min-w-0 flex-1 bg-gray-50 px-8 py-7">
+          <PageHeader title="Pedidos" subtitle="Gerencie os pedidos de entrega dos seus clientes">
+            <ViewToggle view={view} onChange={setView} />
+            <CreateButton label="Novo pedido" onClick={openCreateForm} />
+          </PageHeader>
 
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="max-w-xs flex-1">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Buscar por cliente..."
-              label="Buscar pedido"
-            />
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="max-w-xs flex-1">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Buscar por cliente..."
+                label="Buscar pedido"
+              />
+            </div>
+            <OrderStatusFilter value={statusFilter} onChange={setStatusFilter} />
+            <OrderDateRangeFilter from={dateFrom} to={dateTo} onChangeFrom={setDateFrom} onChangeTo={setDateTo} />
           </div>
-          <OrderStatusFilter value={statusFilter} onChange={setStatusFilter} />
-          <OrderDateRangeFilter from={dateFrom} to={dateTo} onChangeFrom={setDateFrom} onChangeTo={setDateTo} />
-        </div>
 
-        {filteredOrders.length === 0 ? (
-          <EmptyState
-            message={hasActiveFilters ? "Nenhum pedido encontrado para os filtros aplicados." : "Nenhum pedido cadastrado."}
-          />
-        ) : view === "cards" ? (
-          <OrderGrid
-            orders={filteredOrders}
+          {selectedIds.size > 0 && (
+            <OrderBulkActionsBar
+              count={selectedIds.size}
+              onMarkEmRota={() => handleBulkStatus("em_rota")}
+              onMarkEntregue={() => handleBulkStatus("entregue")}
+              onCancel={() => handleBulkStatus("cancelado")}
+              onInvoice={() => handleBulkInvoice(true)}
+              onUninvoice={() => handleBulkInvoice(false)}
+              onDelete={() => setIsBulkDeleteOpen(true)}
+              onClear={clearSelection}
+            />
+          )}
+
+          {filteredOrders.length === 0 ? (
+            <EmptyState
+              message={hasActiveFilters ? "Nenhum pedido encontrado para os filtros aplicados." : "Nenhum pedido cadastrado."}
+            />
+          ) : view === "cards" ? (
+            <OrderGrid
+              orders={filteredOrders}
+              customers={customers}
+              vehicles={vehicles}
+              drivers={drivers}
+              paymentMethods={paymentMethods}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onEdit={openEditForm}
+              onDelete={setOrderToDelete}
+              onDuplicate={handleDuplicate}
+              onPrint={setOrderToPrint}
+              onChangeStatus={handleChangeStatus}
+              onToggleInvoiced={handleToggleInvoiced}
+            />
+          ) : (
+            <OrderTable
+              orders={filteredOrders}
+              customers={customers}
+              vehicles={vehicles}
+              drivers={drivers}
+              paymentMethods={paymentMethods}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
+              onEdit={openEditForm}
+              onDelete={setOrderToDelete}
+              onDuplicate={handleDuplicate}
+              onPrint={setOrderToPrint}
+              onChangeStatus={handleChangeStatus}
+              onToggleInvoiced={handleToggleInvoiced}
+            />
+          )}
+        </main>
+
+        {isFormOpen && (
+          <OrderFormModal
+            order={formOrder}
             customers={customers}
             vehicles={vehicles}
             drivers={drivers}
+            products={products}
             paymentMethods={paymentMethods}
-            onEdit={openEditForm}
-            onDelete={setOrderToDelete}
-            onDuplicate={handleDuplicate}
-            onPrint={setOrderToPrint}
-          />
-        ) : (
-          <OrderTable
-            orders={filteredOrders}
-            customers={customers}
-            vehicles={vehicles}
-            drivers={drivers}
-            paymentMethods={paymentMethods}
-            onEdit={openEditForm}
-            onDelete={setOrderToDelete}
-            onDuplicate={handleDuplicate}
-            onPrint={setOrderToPrint}
+            paymentConditions={paymentConditions}
+            onClose={closeForm}
+            onSubmit={handleSubmit}
           />
         )}
-      </main>
 
-      {isFormOpen && (
-        <OrderFormModal
-          order={formOrder}
-          customers={customers}
-          vehicles={vehicles}
-          drivers={drivers}
-          products={products}
-          paymentMethods={paymentMethods}
-          paymentConditions={paymentConditions}
-          onClose={closeForm}
-          onSubmit={handleSubmit}
-        />
-      )}
+        {orderToDelete && (
+          <ConfirmDialog
+            title="Excluir pedido"
+            description={
+              <>
+                Excluir o pedido de{" "}
+                <span className="font-bold text-gray-700">
+                  {customers.find((customer) => customer.id === orderToDelete.customerId)?.name ?? "cliente"}
+                </span>{" "}
+                em {formatDate(orderToDelete.date)}? Essa ação não pode ser desfeita.
+              </>
+            }
+            confirmLabel="Excluir"
+            onCancel={() => setOrderToDelete(null)}
+            onConfirm={() => {
+              deleteOrder(orderToDelete.id);
+              success("Pedido excluído", "O registro foi removido.");
+              setOrderToDelete(null);
+            }}
+          />
+        )}
 
-      {orderToDelete && (
-        <ConfirmDialog
-          title="Excluir pedido"
-          description={
-            <>
-              Excluir o pedido de{" "}
-              <span className="font-bold text-gray-700">
-                {customers.find((customer) => customer.id === orderToDelete.customerId)?.name ?? "cliente"}
-              </span>{" "}
-              em {formatDate(orderToDelete.date)}? Essa ação não pode ser desfeita.
-            </>
-          }
-          confirmLabel="Excluir"
-          onCancel={() => setOrderToDelete(null)}
-          onConfirm={() => {
-            deleteOrder(orderToDelete.id);
-            success("Pedido excluído", "O registro foi removido.");
-            setOrderToDelete(null);
-          }}
-        />
-      )}
-    </div>
-
-    {orderToPrint && (
-      <div className="hidden print:block">
-        <OrderPrintView
-          order={orderToPrint}
-          customers={customers}
-          vehicles={vehicles}
-          drivers={drivers}
-          products={products}
-          paymentMethods={paymentMethods}
-          paymentConditions={paymentConditions}
-        />
+        {isBulkDeleteOpen && (
+          <ConfirmDialog
+            title="Excluir pedidos selecionados"
+            description={
+              <>
+                Excluir <span className="font-bold text-gray-700">{selectedIds.size}</span> pedido(s) selecionado(s)?
+                Essa ação não pode ser desfeita.
+              </>
+            }
+            confirmLabel="Excluir"
+            onCancel={() => setIsBulkDeleteOpen(false)}
+            onConfirm={handleBulkDelete}
+          />
+        )}
       </div>
-    )}
+
+      {orderToPrint && (
+        <div className="hidden print:block">
+          <OrderPrintView
+            order={orderToPrint}
+            customers={customers}
+            vehicles={vehicles}
+            drivers={drivers}
+            products={products}
+            paymentMethods={paymentMethods}
+            paymentConditions={paymentConditions}
+          />
+        </div>
+      )}
     </>
   );
 }
+
+const STATUS_TOAST_LABEL: Record<OrderStatus, string> = {
+  aguardando: "aguardando",
+  em_rota: "em rota",
+  entregue: "entregue",
+  cancelado: "cancelado",
+};
