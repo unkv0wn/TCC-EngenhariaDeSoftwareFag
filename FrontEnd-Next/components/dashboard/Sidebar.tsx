@@ -3,7 +3,18 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Car, ChevronDown, LayoutDashboard, LogOut, Settings } from "lucide-react";
+import {
+  Car,
+  ChevronDown,
+  Fuel,
+  IdCard,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Ruler,
+  Settings,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_GROUPS = [
@@ -13,7 +24,14 @@ const NAV_GROUPS = [
   },
   {
     label: "Cadastros",
-    items: [{ href: "/dashboard/veiculos", label: "Veículos", icon: Car }],
+    items: [
+      { href: "/dashboard/veiculos", label: "Veículos", icon: Car },
+      { href: "/dashboard/unidades", label: "Unidades de Medida", icon: Ruler },
+      { href: "/dashboard/produtos", label: "Produtos", icon: Package },
+      { href: "/dashboard/clientes", label: "Clientes", icon: Users },
+      { href: "/dashboard/motoristas", label: "Motoristas", icon: IdCard },
+      { href: "/dashboard/abastecimentos", label: "Abastecimentos", icon: Fuel },
+    ],
   },
 ] as const;
 
