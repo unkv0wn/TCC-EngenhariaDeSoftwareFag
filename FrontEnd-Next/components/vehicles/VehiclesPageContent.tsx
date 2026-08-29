@@ -1,22 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { CreateButton } from "@/components/ui/CreateButton";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
 import { DeleteVehicleDialog } from "@/components/vehicles/DeleteVehicleDialog";
 import { VehicleFormModal } from "@/components/vehicles/VehicleFormModal";
 import { VehicleGrid } from "@/components/vehicles/VehicleGrid";
 import { VehicleTable } from "@/components/vehicles/VehicleTable";
-import { ViewToggle, type VehicleView } from "@/components/vehicles/ViewToggle";
 import { useVehicles, type Vehicle } from "@/hooks/useVehicles";
+import { useRefuelings } from "@/hooks/useRefuelings";
 import { useToast } from "@/hooks/useToast";
 import type { VehicleFormData } from "@/lib/validations/vehicle";
 
 export function VehiclesPageContent() {
   const { vehicles, createVehicle, updateVehicle, deleteVehicle } = useVehicles();
-  const { success } = useToast();
-  const [view, setView] = useState<VehicleView>("cards");
+  const { refuelings } = useRefuelings();
+  const { success, error } = useToast();
+  const [view, setView] = useState<ListView>("cards");
   const [search, setSearch] = useState("");
   const [formVehicle, setFormVehicle] = useState<Vehicle | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -48,6 +53,14 @@ export function VehiclesPageContent() {
   }
 
   function handleSubmit(data: VehicleFormData) {
+    const isDuplicatePlate = vehicles.some(
+      (vehicle) => vehicle.plate === data.plate && vehicle.id !== formVehicle?.id
+    );
+    if (isDuplicatePlate) {
+      error("Placa já cadastrada", `${data.plate} já pertence a outro veículo.`);
+      return;
+    }
+
     if (formVehicle) {
       updateVehicle(formVehicle.id, data);
       success("Veículo atualizado", `${data.plate} foi atualizado com sucesso.`);
@@ -58,52 +71,47 @@ export function VehiclesPageContent() {
     closeForm();
   }
 
+  function handleDeleteClick(vehicle: Vehicle) {
+    const usageCount = refuelings.filter((refueling) => refueling.vehicleId === vehicle.id).length;
+    if (usageCount > 0) {
+      error(
+        "Veículo em uso",
+        `${usageCount} abastecimento(s) usam este veículo e ele não pode ser excluído.`
+      );
+      return;
+    }
+    setVehicleToDelete(vehicle);
+  }
+
   return (
     <div className="flex flex-1">
       <Sidebar />
 
-      <main className="flex-1 bg-gray-50 px-8 py-7">
-        <div className="mb-5 flex items-start justify-between">
-          <div>
-            <h1 className="text-[19px] font-extrabold text-gray-900">Veículos</h1>
-            <p className="mt-1 text-[13px] font-medium text-gray-500">Gerencie os veículos da sua frota</p>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <ViewToggle view={view} onChange={setView} />
-            <button
-              type="button"
-              onClick={openCreateForm}
-              className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2.5 text-[13.5px] font-bold text-white hover:bg-primary-700"
-            >
-              <Plus className="h-[15px] w-[15px]" aria-hidden="true" />
-              Novo veículo
-            </button>
-          </div>
-        </div>
+      <main className="min-w-0 flex-1 bg-gray-50 px-8 py-7">
+        <PageHeader title="Veículos" subtitle="Gerencie os veículos da sua frota">
+          <ViewToggle view={view} onChange={setView} />
+          <CreateButton label="Novo veículo" onClick={openCreateForm} />
+        </PageHeader>
 
-        <div className="relative mb-4 max-w-xs">
-          <Search
-            className="pointer-events-none absolute inset-y-0 left-3 my-auto h-4 w-4 text-gray-400"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar por placa, modelo, marca ou cor..."
-            aria-label="Buscar veículo"
-            className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-3.5 text-sm text-gray-900 placeholder:text-gray-400 transition-all duration-150 ease-out hover:border-gray-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/15"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por placa, modelo, marca ou cor..."
+          label="Buscar veículo"
+        />
 
         {filteredVehicles.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 px-6 py-8 text-center text-[12.5px] font-semibold text-gray-400">
-            Nenhum veículo encontrado para &quot;{search}&quot;.
-          </div>
+          <EmptyState
+            message={
+              search
+                ? `Nenhum veículo encontrado para "${search}".`
+                : "Nenhum veículo cadastrado."
+            }
+          />
         ) : view === "cards" ? (
-          <VehicleGrid vehicles={filteredVehicles} onEdit={openEditForm} onDelete={setVehicleToDelete} />
+          <VehicleGrid vehicles={filteredVehicles} onEdit={openEditForm} onDelete={handleDeleteClick} />
         ) : (
-          <VehicleTable vehicles={filteredVehicles} onEdit={openEditForm} onDelete={setVehicleToDelete} />
+          <VehicleTable vehicles={filteredVehicles} onEdit={openEditForm} onDelete={handleDeleteClick} />
         )}
       </main>
 

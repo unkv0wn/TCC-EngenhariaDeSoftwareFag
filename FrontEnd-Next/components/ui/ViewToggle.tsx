@@ -3,11 +3,11 @@
 import { LayoutGrid, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type VehicleView = "cards" | "table";
+export type ListView = "cards" | "table";
 
 interface ViewToggleProps {
-  view: VehicleView;
-  onChange: (view: VehicleView) => void;
+  view: ListView;
+  onChange: (view: ListView) => void;
 }
 
 export function ViewToggle({ view, onChange }: ViewToggleProps) {
