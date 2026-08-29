@@ -2,10 +2,24 @@
 
 import { useCallback, useState } from "react";
 
-import type { OrderFormData } from "@/lib/validations/order";
+import type { OrderFormData, OrderStatus } from "@/lib/validations/order";
+
+export interface OrderHistoryEntry {
+  status: OrderStatus;
+  changedAt: string;
+}
 
 export interface Order extends OrderFormData {
   id: string;
+  history: OrderHistoryEntry[];
+}
+
+function todayIsoDate(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 const INITIAL_ORDERS: Order[] = [
@@ -18,9 +32,17 @@ const INITIAL_ORDERS: Order[] = [
     paymentConditionId: "avista",
     date: "2026-08-20",
     status: "entregue",
+    discount: 10,
+    shippingCost: 25,
+    notes: "Entregar na portaria dos fundos.",
     items: [
       { productId: "1", quantity: 10, unitPrice: 18.9 },
       { productId: "3", quantity: 5, unitPrice: 24.9 },
+    ],
+    history: [
+      { status: "aguardando", changedAt: "2026-08-18T09:12:00.000Z" },
+      { status: "em_rota", changedAt: "2026-08-20T08:03:00.000Z" },
+      { status: "entregue", changedAt: "2026-08-20T14:47:00.000Z" },
     ],
   },
   {
@@ -32,7 +54,14 @@ const INITIAL_ORDERS: Order[] = [
     paymentConditionId: "30-60",
     date: "2026-08-24",
     status: "em_rota",
+    discount: 0,
+    shippingCost: 0,
+    notes: "",
     items: [{ productId: "2", quantity: 20, unitPrice: 42.5 }],
+    history: [
+      { status: "aguardando", changedAt: "2026-08-22T11:30:00.000Z" },
+      { status: "em_rota", changedAt: "2026-08-24T07:55:00.000Z" },
+    ],
   },
   {
     id: "3",
@@ -43,27 +72,58 @@ const INITIAL_ORDERS: Order[] = [
     paymentConditionId: "3x-sem-juros",
     date: "2026-08-27",
     status: "aguardando",
+    discount: 0,
+    shippingCost: 15,
+    notes: "",
     items: [
       { productId: "4", quantity: 8, unitPrice: 65 },
       { productId: "5", quantity: 15, unitPrice: 2.5 },
     ],
+    history: [{ status: "aguardando", changedAt: "2026-08-26T16:20:00.000Z" }],
   },
 ];
 
 export function useOrders() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
 
-  const createOrder = useCallback((data: OrderFormData) => {
-    setOrders((prev) => [...prev, { ...data, id: crypto.randomUUID() }]);
+  const createOrder = useCallback((data: OrderFormData): Order => {
+    const newOrder: Order = {
+      ...data,
+      id: crypto.randomUUID(),
+      history: [{ status: data.status, changedAt: new Date().toISOString() }],
+    };
+    setOrders((prev) => [...prev, newOrder]);
+    return newOrder;
   }, []);
 
   const updateOrder = useCallback((id: string, data: OrderFormData) => {
-    setOrders((prev) => prev.map((order) => (order.id === id ? { ...data, id } : order)));
+    setOrders((prev) =>
+      prev.map((order) => {
+        if (order.id !== id) return order;
+        const statusChanged = order.status !== data.status;
+        const history = statusChanged
+          ? [...order.history, { status: data.status, changedAt: new Date().toISOString() }]
+          : order.history;
+        return { ...data, id, history };
+      })
+    );
   }, []);
 
   const deleteOrder = useCallback((id: string) => {
     setOrders((prev) => prev.filter((order) => order.id !== id));
   }, []);
 
-  return { orders, createOrder, updateOrder, deleteOrder };
+  const duplicateOrder = useCallback((order: Order): Order => {
+    const duplicate: Order = {
+      ...order,
+      id: crypto.randomUUID(),
+      date: todayIsoDate(),
+      status: "aguardando",
+      history: [{ status: "aguardando", changedAt: new Date().toISOString() }],
+    };
+    setOrders((prev) => [...prev, duplicate]);
+    return duplicate;
+  }, []);
+
+  return { orders, createOrder, updateOrder, deleteOrder, duplicateOrder };
 }

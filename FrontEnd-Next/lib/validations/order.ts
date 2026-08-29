@@ -32,6 +32,13 @@ export const orderSchema = z.object({
   date: z.string().min(1, "Informe a data."),
   status: z.enum(ORDER_STATUS_VALUES, { message: "Selecione o status." }),
   items: z.array(orderItemSchema).min(1, "Adicione ao menos um item."),
+  discount: requiredNumber("Informe o desconto.").refine((value) => value >= 0, {
+    message: "O desconto não pode ser negativo.",
+  }),
+  shippingCost: requiredNumber("Informe o frete.").refine((value) => value >= 0, {
+    message: "O frete não pode ser negativo.",
+  }),
+  notes: z.string().max(500, "Máximo de 500 caracteres.").optional(),
 });
 
 export type OrderItemFormData = z.infer<typeof orderItemSchema>;

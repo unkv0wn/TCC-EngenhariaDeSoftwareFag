@@ -1,5 +1,6 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Copy, Pencil, Printer, Trash2 } from "lucide-react";
 
+import { ActionsMenu } from "@/components/ui/ActionsMenu";
 import { cn } from "@/lib/utils";
 import type { Customer } from "@/hooks/useCustomers";
 import type { Driver } from "@/hooks/useDrivers";
@@ -31,9 +32,21 @@ interface OrderTableProps {
   paymentMethods: PaymentMethod[];
   onEdit: (order: Order) => void;
   onDelete: (order: Order) => void;
+  onDuplicate: (order: Order) => void;
+  onPrint: (order: Order) => void;
 }
 
-export function OrderTable({ orders, customers, vehicles, drivers, paymentMethods, onEdit, onDelete }: OrderTableProps) {
+export function OrderTable({
+  orders,
+  customers,
+  vehicles,
+  drivers,
+  paymentMethods,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onPrint,
+}: OrderTableProps) {
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
       <table className="w-full text-left text-sm">
@@ -76,7 +89,7 @@ export function OrderTable({ orders, customers, vehicles, drivers, paymentMethod
                   {paymentMethod?.name ?? "—"}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-bold text-gray-900">
-                  {formatCurrency(calculateOrderTotal(order.items))}
+                  {formatCurrency(calculateOrderTotal(order.items, order.discount, order.shippingCost))}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3">
                   <span
@@ -86,23 +99,16 @@ export function OrderTable({ orders, customers, vehicles, drivers, paymentMethod
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onEdit(order)}
-                      aria-label={`Editar pedido de ${customer?.name ?? "cliente"}`}
-                      className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                    >
-                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(order)}
-                      aria-label={`Excluir pedido de ${customer?.name ?? "cliente"}`}
-                      className="rounded-md p-1.5 text-gray-400 hover:bg-danger-50 hover:text-danger-600"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+                  <div className="flex justify-end">
+                    <ActionsMenu
+                      ariaLabel={`Ações do pedido de ${customer?.name ?? "cliente"}`}
+                      actions={[
+                        { label: "Imprimir", icon: Printer, onClick: () => onPrint(order) },
+                        { label: "Duplicar", icon: Copy, onClick: () => onDuplicate(order) },
+                        { label: "Editar", icon: Pencil, onClick: () => onEdit(order) },
+                        { label: "Excluir", icon: Trash2, onClick: () => onDelete(order), variant: "danger" },
+                      ]}
+                    />
                   </div>
                 </td>
               </tr>
