@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Car,
+  CalendarClock,
   ChevronDown,
+  ClipboardList,
   Fuel,
   IdCard,
   LayoutDashboard,
@@ -14,26 +16,69 @@ import {
   Ruler,
   Settings,
   Users,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const NAV_GROUPS = [
+interface NavLeafItem {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+}
+
+interface NavSubgroup {
+  label: string;
+  items: readonly NavLeafItem[];
+}
+
+interface NavGroupData {
+  label: string;
+  items: readonly NavLeafItem[];
+  subgroups?: readonly NavSubgroup[];
+}
+
+const NAV_GROUPS: readonly NavGroupData[] = [
   {
     label: "Geral",
     items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
     label: "Cadastros",
-    items: [
-      { href: "/dashboard/veiculos", label: "Veículos", icon: Car },
-      { href: "/dashboard/unidades", label: "Unidades de Medida", icon: Ruler },
-      { href: "/dashboard/produtos", label: "Produtos", icon: Package },
-      { href: "/dashboard/clientes", label: "Clientes", icon: Users },
-      { href: "/dashboard/motoristas", label: "Motoristas", icon: IdCard },
-      { href: "/dashboard/abastecimentos", label: "Abastecimentos", icon: Fuel },
+    items: [],
+    subgroups: [
+      {
+        label: "Frota",
+        items: [
+          { href: "/dashboard/veiculos", label: "Veículos", icon: Car },
+          { href: "/dashboard/motoristas", label: "Motoristas", icon: IdCard },
+          { href: "/dashboard/abastecimentos", label: "Abastecimentos", icon: Fuel },
+        ],
+      },
+      {
+        label: "Catálogo",
+        items: [
+          { href: "/dashboard/unidades", label: "Unidades de Medida", icon: Ruler },
+          { href: "/dashboard/produtos", label: "Produtos", icon: Package },
+        ],
+      },
+      {
+        label: "Comercial",
+        items: [{ href: "/dashboard/clientes", label: "Clientes", icon: Users }],
+      },
+      {
+        label: "Financeiro",
+        items: [
+          { href: "/dashboard/formas-pagamento", label: "Formas de Pagamento", icon: Wallet },
+          { href: "/dashboard/condicoes-pagamento", label: "Condições", icon: CalendarClock },
+        ],
+      },
     ],
   },
-] as const;
+  {
+    label: "Operação",
+    items: [{ href: "/dashboard/pedidos", label: "Pedidos", icon: ClipboardList }],
+  },
+];
 
 function NavItem({
   icon: Icon,
@@ -81,7 +126,7 @@ function NavItem({
   );
 }
 
-function NavGroup({ label, items, pathname }: (typeof NAV_GROUPS)[number] & { pathname: string }) {
+function NavGroup({ label, items, subgroups, pathname }: NavGroupData & { pathname: string }) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -103,10 +148,23 @@ function NavGroup({ label, items, pathname }: (typeof NAV_GROUPS)[number] & { pa
           aria-hidden="true"
         />
       </button>
-      {expanded &&
-        items.map((item) => (
-          <NavItem key={item.label} {...item} active={"href" in item && item.href === pathname} />
-        ))}
+      {expanded && (
+        <>
+          {items.map((item) => (
+            <NavItem key={item.label} {...item} active={item.href === pathname} />
+          ))}
+          {subgroups?.map((subgroup) => (
+            <div key={subgroup.label} className="mt-1 flex flex-col gap-0.5 border-l border-gray-100 pl-2.5">
+              <span className="px-2 py-1 text-[9.5px] font-extrabold uppercase tracking-wider text-gray-300">
+                {subgroup.label}
+              </span>
+              {subgroup.items.map((item) => (
+                <NavItem key={item.label} {...item} active={item.href === pathname} />
+              ))}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
