@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static com.routewise.validation.EmpiricalTireLifeCalculator.AxlePosition.TRACAO;
+import static com.routewise.validation.AxlePosition.TRACAO;
 import static com.routewise.validation.EmpiricalTireLifeCalculator.TireReplacementReason.DANO_ACIDENTE;
 import static com.routewise.validation.EmpiricalTireLifeCalculator.TireReplacementReason.DESGASTE_NORMAL;
 import static com.routewise.validation.EmpiricalTireLifeCalculator.TireReplacementRecord;

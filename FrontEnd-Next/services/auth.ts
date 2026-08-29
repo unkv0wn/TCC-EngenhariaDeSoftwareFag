@@ -1,12 +1,7 @@
 import type { LoginFormData } from "@/lib/validations/auth";
 
 export interface AuthResponse {
-  token: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
+  email: string;
 }
 
 export class AuthError extends Error {
@@ -16,9 +11,20 @@ export class AuthError extends Error {
   }
 }
 
-// Backend ainda não conectado — chamada de rede removida temporariamente.
-export async function login(_data: LoginFormData): Promise<AuthResponse> {
-  throw new Error("login() está desconectado do backend por enquanto.");
+export async function login(data: LoginFormData): Promise<AuthResponse> {
+  const response = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new AuthError(body.message ?? "Não foi possível entrar.", response.status);
+  }
+
+  return body as AuthResponse;
 }
 
 export function loginWithProvider(provider: "google" | "microsoft") {

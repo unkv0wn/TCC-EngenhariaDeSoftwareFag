@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static com.routewise.validation.EmpiricalFuelConsumptionCalculator.RefuelingRecord;
-import static com.routewise.validation.EmpiricalTireLifeCalculator.AxlePosition.TRACAO;
+import static com.routewise.validation.AxlePosition.TRACAO;
 import static com.routewise.validation.EmpiricalTireLifeCalculator.TireReplacementReason.DESGASTE_NORMAL;
 import static com.routewise.validation.EmpiricalTireLifeCalculator.TireReplacementRecord;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,13 +59,10 @@ class EmpiricalCostCalculatorsCombinedTest {
     assertThat(empiricalConsumption).isGreaterThan(ASSUMED.baseFuelConsumptionLPer100Km());
     assertThat(empiricalTireLifeKm).isLessThan(ASSUMED.tireLifeKm());
 
-    VehicleProfile empirical = new VehicleProfile(
-      ASSUMED.label() + " (empírico)", ASSUMED.axleCount(),
-      ASSUMED.capacityKg(), ASSUMED.capacityM3(),
-      empiricalConsumption, ASSUMED.fuelPricePerLiter(),
-      ASSUMED.tireReplacementCostPerTire(), empiricalTireLifeKm,
-      ASSUMED.driverCostPerHourReais()
-    );
+    VehicleProfile empirical = ASSUMED
+      .withLabel(ASSUMED.label() + " (empírico)")
+      .withFuelConsumption(empiricalConsumption)
+      .withTireLifeKm(empiricalTireLifeKm);
 
     List<WaypointDto> waypoints = List.of(new WaypointDto(-23.55, -46.63), new WaypointDto(-23.50, -46.60));
     Scenario scenario = new Scenario(

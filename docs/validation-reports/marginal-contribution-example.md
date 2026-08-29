@@ -12,10 +12,10 @@ de furto/sinistro. Para validar uma variável nova de verdade, troque a fórmula
 | Métrica | Valor |
 |---|---|
 | Cenários testados | 500 |
-| Rotas que mudaram ao adicionar a variável | 20.2% |
-| Gap médio de custo | 0.40% |
+| Rotas que mudaram ao adicionar a variável | 18.4% |
+| Gap médio de custo | 0.30% |
 | Wilcoxon p-valor | 0.0000 |
-| Correlação (Spearman) com o custo já existente | 0.653 |
+| Correlação (Spearman) com o custo já existente | 0.647 |
 
 Correlação alta (>= 0.9) sugere que a variável nova está medindo, na prática,
 algo já capturado pelas variáveis atuais (redundância). Correlação baixa com

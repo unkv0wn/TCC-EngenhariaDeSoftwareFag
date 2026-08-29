@@ -105,18 +105,22 @@ muda.
   mesma categoria de "ar-condicionado ligado" no combustível.
 - Persistência real do log de trocas — decisão de uma eventual spec de integração em
   produção.
-- Ainda fora de escopo: refatorar `CostMatrixBuilder` pra somar `tireWearFraction` por
-  posição de eixo (fórmula acima) — o que já existe é `EmpiricalTireLifeCalculator`
-  produzindo o `tireLifeKm` calibrado; plugar isso no formato multi-posição da fórmula
-  fica pra uma etapa própria.
 - Qualquer alteração em `RouteController`, `RouteOptimizerServiceImpl` ou no frontend.
+
+> **Atualização (2026-08-05):** o refactor do `CostMatrixBuilder` para somar
+> `tireWearFraction` por posição de eixo — listado aqui como fora de escopo — foi
+> implementado na branch `review-math-a-star`. Ver
+> `docs/refactor-math-result/04-desgaste-pneu-por-eixo.md`. Um achado da implementação:
+> a fórmula antiga usava `axleCount` como se fosse a quantidade de pneus, subestimando o
+> custo de pneu em ~3x; a contagem real por posição vive agora em `AxleLayout`.
 
 ## Estrutura de código
 
 | Classe | Responsabilidade |
 |---|---|
-| `EmpiricalTireLifeCalculator.AxlePosition` | enum — `DIANTEIRO`, `TRACAO`, `REBOQUE` |
+| `AxlePosition` | enum — `DIANTEIRO`, `TRACAO`, `REBOQUE`, cada um com seu `lifeFactor` (promovido para top-level em 2026-08-05, quando passou a ser usado fora do calculador) |
+| `AxleLayout` | record — quantos pneus em cada posição, fixo por classe de veículo |
 | `EmpiricalTireLifeCalculator.TireReplacementReason` | enum — `DESGASTE_NORMAL`, `DANO_ACIDENTE` |
 | `EmpiricalTireLifeCalculator.TireReplacementRecord` | record — `kmInstalacao`, `kmTroca`, `motivoTroca`, `posicaoEixo` (implementado — `classeVeiculo` não entra no record; agrupar por classe é responsabilidade de quem monta o log passado ao calculador, mesma convenção do `EmpiricalFuelConsumptionCalculator`) |
 | `EmpiricalTireLifeCalculator` | filtra `DESGASTE_NORMAL`, aplica a janela móvel de 2 eventos com fallback de partida a fria — implementado, com testes em `EmpiricalTireLifeCalculatorTest` e `EmpiricalCostCalculatorsCombinedTest` |
-| `CostMatrixBuilder` (a alterar) | `tireWearFraction` ainda usa um `tireLifeKm` único — somar por posição é trabalho futuro |
+| `CostMatrixBuilder` | `baseTireWearPerKm` soma a fração de desgaste por posição de eixo (implementado em 2026-08-05, com testes em `AxleTireWearTest`) |

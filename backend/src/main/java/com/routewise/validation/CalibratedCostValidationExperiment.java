@@ -51,13 +51,10 @@ public final class CalibratedCostValidationExperiment {
     double empiricalTireLifeKm = EmpiricalTireLifeCalculator.tireLifeKm(
       TireLifeFromReplacementLogExample.REPLACEMENT_LOG, assumedProfile.tireLifeKm()
     );
-    VehicleProfile calibratedProfile = new VehicleProfile(
-      assumedProfile.label() + " (calibrado: combustível + pneu empíricos)", assumedProfile.axleCount(),
-      assumedProfile.capacityKg(), assumedProfile.capacityM3(),
-      empiricalConsumption, assumedProfile.fuelPricePerLiter(),
-      assumedProfile.tireReplacementCostPerTire(), empiricalTireLifeKm,
-      assumedProfile.driverCostPerHourReais()
-    );
+    VehicleProfile calibratedProfile = assumedProfile
+      .withLabel(assumedProfile.label() + " (calibrado: combustível + pneu empíricos)")
+      .withFuelConsumption(empiricalConsumption)
+      .withTireLifeKm(empiricalTireLifeKm);
 
     Random rng = new Random(SEED);
     ScenarioGenerator generator = new ScenarioGenerator(rng);

@@ -1,6 +1,6 @@
 # Vida Útil de Pneu Empírica (via Log de Trocas) vs Assumida — Relatório
 
-Gerado em: 2026-08-01 13:06:06
+Gerado em: 2026-08-05 00:59:17
 
 ## 1. Contexto
 
@@ -89,11 +89,11 @@ Nesse único trecho, a vida útil empírica (mais curta) resulta em +0.0308 R$ (
 
 | Métrica | Vida útil assumida (60.000 km) | Vida útil empírica |
 |---|---|---|
-| Desgaste de pneu — rota do Cenário A | R$ 2.19 | R$ 2.99 |
-| Desgaste de pneu — rota do Cenário B | R$ 2.18 | R$ 2.97 |
-| Custo total (fórmula B) — rota do Cenário A | R$ 36.20 | R$ 36.99 |
-| Custo total (fórmula B) — rota do Cenário B | R$ 36.10 | R$ 36.89 |
-| Gap (A vs B, mesma fórmula) | R$ 0.10 (0.26%) | R$ 0.10 (0.27%) |
+| Desgaste de pneu — rota do Cenário A | R$ 7.57 | R$ 10.33 |
+| Desgaste de pneu — rota do Cenário B | R$ 7.52 | R$ 10.26 |
+| Custo total (fórmula B) — rota do Cenário A | R$ 41.57 | R$ 44.33 |
+| Custo total (fórmula B) — rota do Cenário B | R$ 41.44 | R$ 44.18 |
+| Gap (A vs B, mesma fórmula) | R$ 0.13 (0.32%) | R$ 0.15 (0.34%) |
 
 ## 9. Conclusão
 

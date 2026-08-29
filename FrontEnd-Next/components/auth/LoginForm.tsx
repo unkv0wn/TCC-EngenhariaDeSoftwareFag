@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
@@ -16,6 +17,7 @@ import { AuthError, login, loginWithProvider } from "@/services/auth";
 type AuthStatus = "idle" | "loading" | "success" | "error";
 
 export function LoginForm() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<AuthStatus>("idle");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export function LoginForm() {
       await login(data);
       setStatus("success");
       setAuthMessage("Login realizado com sucesso!");
+      router.push("/dashboard");
     } catch (err) {
       setStatus("error");
       setAuthMessage(

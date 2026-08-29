@@ -1,6 +1,6 @@
 # Validação de Ocupação de Carga (Peso x Cubagem) — Relatório Detalhado
 
-Gerado em: 2026-07-30 22:24:55
+Gerado em: 2026-08-05 00:58:47
 
 Este relatório documenta, caso a caso, a lógica de `CargoOccupancy` — quem decide, entre peso (kg) e volume (m³), qual dimensão limita a carga de um veículo, e se a carga é fisicamente viável. Os mesmos casos são verificados como testes automatizados em `CargoOccupancyTest` (JUnit, `mvn test`); este documento existe para apresentar a mesma evidência de forma legível, e amplia a cobertura para os três perfis de veículo (`VehicleProfile.light()/medium()/heavy()`), não só o perfil médio usado no teste.
 
@@ -63,21 +63,21 @@ Mesmo trecho fixo, variando só a carga — isola o efeito de `loadFactor` nas f
 
 | Caso | Perfil | Duração | Combustível | Desgaste de pneu |
 |---|---|---|---|---|
-| Carga densa (peso-limitante) | Leve (2 eixos) | 120.0 min | 13.00 L | R$ 5.40 |
-| Carga densa (peso-limitante) | Médio (3 eixos) | 120.0 min | 19.05 L | R$ 13.05 |
-| Carga densa (peso-limitante) | Pesado (5 eixos) | 120.0 min | 34.88 L | R$ 15.81 |
-| Carga volumosa (volume-limitante) | Leve (2 eixos) | 120.0 min | 13.00 L | R$ 5.40 |
-| Carga volumosa (volume-limitante) | Médio (3 eixos) | 120.0 min | 19.05 L | R$ 13.05 |
-| Carga volumosa (volume-limitante) | Pesado (5 eixos) | 120.0 min | 34.40 L | R$ 15.47 |
-| Excesso de peso | Leve (2 eixos) | 120.0 min | 13.00 L | R$ 5.40 |
-| Excesso de peso | Médio (3 eixos) | 120.0 min | 19.50 L | R$ 13.50 |
-| Excesso de peso | Pesado (5 eixos) | 120.0 min | 36.00 L | R$ 16.61 |
-| Excesso de volume | Leve (2 eixos) | 120.0 min | 13.00 L | R$ 5.40 |
-| Excesso de volume | Médio (3 eixos) | 120.0 min | 19.50 L | R$ 13.50 |
-| Excesso de volume | Pesado (5 eixos) | 120.0 min | 35.20 L | R$ 16.04 |
-| Carga vazia | Leve (2 eixos) | 120.0 min | 10.00 L | R$ 3.60 |
-| Carga vazia | Médio (3 eixos) | 120.0 min | 15.00 L | R$ 9.00 |
-| Carga vazia | Pesado (5 eixos) | 120.0 min | 32.00 L | R$ 13.75 |
+| Carga densa (peso-limitante) | Leve (2 eixos) | 120.0 min | 13.00 L | R$ 17.15 |
+| Carga densa (peso-limitante) | Médio (3 eixos) | 120.0 min | 19.05 L | R$ 45.04 |
+| Carga densa (peso-limitante) | Pesado (5 eixos) | 120.0 min | 34.88 L | R$ 52.98 |
+| Carga volumosa (volume-limitante) | Leve (2 eixos) | 120.0 min | 13.00 L | R$ 17.15 |
+| Carga volumosa (volume-limitante) | Médio (3 eixos) | 120.0 min | 19.05 L | R$ 45.04 |
+| Carga volumosa (volume-limitante) | Pesado (5 eixos) | 120.0 min | 34.40 L | R$ 51.83 |
+| Excesso de peso | Leve (2 eixos) | 120.0 min | 13.00 L | R$ 17.15 |
+| Excesso de peso | Médio (3 eixos) | 120.0 min | 19.50 L | R$ 46.59 |
+| Excesso de peso | Pesado (5 eixos) | 120.0 min | 36.00 L | R$ 55.67 |
+| Excesso de volume | Leve (2 eixos) | 120.0 min | 13.00 L | R$ 17.15 |
+| Excesso de volume | Médio (3 eixos) | 120.0 min | 19.50 L | R$ 46.59 |
+| Excesso de volume | Pesado (5 eixos) | 120.0 min | 35.20 L | R$ 53.75 |
+| Carga vazia | Leve (2 eixos) | 120.0 min | 10.00 L | R$ 11.44 |
+| Carga vazia | Médio (3 eixos) | 120.0 min | 15.00 L | R$ 31.06 |
+| Carga vazia | Pesado (5 eixos) | 120.0 min | 32.00 L | R$ 46.07 |
 
 ## 5. Conclusão
 

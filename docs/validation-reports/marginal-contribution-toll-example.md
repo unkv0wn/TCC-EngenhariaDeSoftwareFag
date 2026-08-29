@@ -12,10 +12,10 @@ rota um pouco mais lenta por vias sem pedágio.
 | Métrica | Valor |
 |---|---|
 | Cenários testados | 500 |
-| Rotas que mudaram ao adicionar o pedágio | 14.8% |
-| Gap médio de custo | 0.19% |
+| Rotas que mudaram ao adicionar o pedágio | 14.0% |
+| Gap médio de custo | 0.15% |
 | Wilcoxon p-valor | 0.0000 |
-| Correlação (Spearman) com o custo já existente | 0.500 |
+| Correlação (Spearman) com o custo já existente | 0.560 |
 
 ## Veredito
 

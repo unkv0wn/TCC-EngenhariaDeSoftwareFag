@@ -1,6 +1,6 @@
 # Comparação de Rotas em Toledo, PR — Cenário A vs Cenário B
 
-Gerado em: 2026-07-30 22:41:13
+Gerado em: 2026-08-05 00:59:26
 
 ## 1. Contexto e metodologia
 
@@ -50,36 +50,36 @@ Ponto 0 (Prefeitura Municipal de Toledo) é o depósito/origem — ponto de part
 | Distância total | 16.30 km | 15.99 km |
 | Duração total | 24.8 min | 25.0 min |
 | Combustível total | 3.20 L | 3.17 L |
-| Desgaste de pneu | R$ 2.19 | R$ 2.18 |
-| Custo total (fórmula combinada) | R$ 36.20 | R$ 36.10 |
+| Desgaste de pneu | R$ 7.57 | R$ 7.52 |
+| Custo total (fórmula combinada) | R$ 41.57 | R$ 41.44 |
 
-**Gap:** seguir a rota do Cenário A custaria R$ 0.10 a mais (0.26%) do que a rota do Cenário B, avaliadas as duas sob a mesma fórmula de custo combinada.
+**Gap:** seguir a rota do Cenário A custaria R$ 0.13 a mais (0.32%) do que a rota do Cenário B, avaliadas as duas sob a mesma fórmula de custo combinada.
 
 ## 6. Detalhamento por trecho — Cenário A
 
 | De | Para | Tipo de via | Distância (km) | Duração (min) | Combustível (L) | Desgaste (R$) | Custo do trecho (R$) |
 |---|---|---|---|---|---|---|---|
-| Prefeitura Municipal de Toledo | Terminal Rodoviário de Toledo | URBANA | 0.50 | 1.2 | 0.12 | 0.08 | 1.50 |
-| Terminal Rodoviário de Toledo | C.Vale — Sede | ARTERIAL | 3.26 | 3.9 | 0.59 | 0.40 | 6.29 |
-| C.Vale — Sede | Parque Ecológico de Toledo | ARTERIAL | 4.02 | 4.8 | 0.73 | 0.49 | 7.75 |
-| Parque Ecológico de Toledo | UNIOESTE — Campus Toledo | URBANA | 1.61 | 3.9 | 0.38 | 0.27 | 4.86 |
-| UNIOESTE — Campus Toledo | Shopping Toledo | ARTERIAL | 4.25 | 5.1 | 0.77 | 0.52 | 8.20 |
-| Shopping Toledo | Catedral Sagrada Família | URBANA | 2.30 | 5.5 | 0.54 | 0.39 | 6.91 |
-| Catedral Sagrada Família | Prefeitura Municipal de Toledo | ARTERIAL | 0.35 | 0.4 | 0.06 | 0.04 | 0.68 |
+| Prefeitura Municipal de Toledo | Terminal Rodoviário de Toledo | URBANA | 0.50 | 1.2 | 0.12 | 0.29 | 1.71 |
+| Terminal Rodoviário de Toledo | C.Vale — Sede | ARTERIAL | 3.26 | 3.9 | 0.59 | 1.37 | 7.27 |
+| C.Vale — Sede | Parque Ecológico de Toledo | ARTERIAL | 4.02 | 4.8 | 0.73 | 1.69 | 8.95 |
+| Parque Ecológico de Toledo | UNIOESTE — Campus Toledo | URBANA | 1.61 | 3.9 | 0.38 | 0.95 | 5.53 |
+| UNIOESTE — Campus Toledo | Shopping Toledo | ARTERIAL | 4.25 | 5.1 | 0.77 | 1.78 | 9.46 |
+| Shopping Toledo | Catedral Sagrada Família | URBANA | 2.30 | 5.5 | 0.54 | 1.35 | 7.87 |
+| Catedral Sagrada Família | Prefeitura Municipal de Toledo | ARTERIAL | 0.35 | 0.4 | 0.06 | 0.15 | 0.79 |
 
 ## 7. Detalhamento por trecho — Cenário B
 
 | De | Para | Tipo de via | Distância (km) | Duração (min) | Combustível (L) | Desgaste (R$) | Custo do trecho (R$) |
 |---|---|---|---|---|---|---|---|
-| Prefeitura Municipal de Toledo | Catedral Sagrada Família | URBANA | 0.35 | 0.8 | 0.08 | 0.06 | 1.07 |
-| Catedral Sagrada Família | Terminal Rodoviário de Toledo | URBANA | 0.85 | 2.0 | 0.20 | 0.14 | 2.56 |
-| Terminal Rodoviário de Toledo | Shopping Toledo | URBANA | 2.05 | 4.9 | 0.48 | 0.35 | 6.17 |
-| Shopping Toledo | UNIOESTE — Campus Toledo | ARTERIAL | 4.25 | 5.1 | 0.77 | 0.52 | 8.20 |
-| UNIOESTE — Campus Toledo | Parque Ecológico de Toledo | URBANA | 1.61 | 3.9 | 0.38 | 0.27 | 4.86 |
-| Parque Ecológico de Toledo | C.Vale — Sede | ARTERIAL | 4.02 | 4.8 | 0.73 | 0.49 | 7.75 |
-| C.Vale — Sede | Prefeitura Municipal de Toledo | ARTERIAL | 2.85 | 3.4 | 0.52 | 0.35 | 5.49 |
+| Prefeitura Municipal de Toledo | Catedral Sagrada Família | URBANA | 0.35 | 0.8 | 0.08 | 0.21 | 1.21 |
+| Catedral Sagrada Família | Terminal Rodoviário de Toledo | URBANA | 0.85 | 2.0 | 0.20 | 0.50 | 2.92 |
+| Terminal Rodoviário de Toledo | Shopping Toledo | URBANA | 2.05 | 4.9 | 0.48 | 1.20 | 7.03 |
+| Shopping Toledo | UNIOESTE — Campus Toledo | ARTERIAL | 4.25 | 5.1 | 0.77 | 1.78 | 9.46 |
+| UNIOESTE — Campus Toledo | Parque Ecológico de Toledo | URBANA | 1.61 | 3.9 | 0.38 | 0.95 | 5.53 |
+| Parque Ecológico de Toledo | C.Vale — Sede | ARTERIAL | 4.02 | 4.8 | 0.73 | 1.69 | 8.95 |
+| C.Vale — Sede | Prefeitura Municipal de Toledo | ARTERIAL | 2.85 | 3.4 | 0.52 | 1.19 | 6.34 |
 
 ## 8. Conclusão
 
 Neste cenário específico de Toledo-PR, considerar combustível e desgaste de pneu muda a ordem de visitação escolhida pelo algoritmo — a rota mais rápida (Cenário A) não é a de menor custo operacional (Cenário B).
-Isolado a este exemplo, o gap de 0.26% é pequeno/moderado comparado à distribuição de 500 trials sintéticos dos outros relatórios deste pacote — o valor esperado para uma única rota real depende muito da geometria específica dos pontos e não deve ser generalizado sem repetir o experimento estatístico com geografia real.
+Isolado a este exemplo, o gap de 0.32% é pequeno/moderado comparado à distribuição de 500 trials sintéticos dos outros relatórios deste pacote — o valor esperado para uma única rota real depende muito da geometria específica dos pontos e não deve ser generalizado sem repetir o experimento estatístico com geografia real.

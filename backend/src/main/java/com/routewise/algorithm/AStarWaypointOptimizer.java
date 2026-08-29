@@ -39,6 +39,23 @@ public class AStarWaypointOptimizer {
 
   private static final Logger log = LoggerFactory.getLogger(AStarWaypointOptimizer.class);
 
+  /**
+   * Default open-set ordering: primarily by {@code f = g + h} ascending (standard
+   * A*); ties broken by preferring the <strong>larger</strong> {@code g} (i.e. the
+   * state deeper into the search, equivalently the one with the smaller — more
+   * "used up" — heuristic remainder). Tie-breaking never changes which cost the
+   * search converges to: any expansion order among equal-{@code f} states still
+   * finds an optimal path once the heuristic is admissible. What it changes is how
+   * many states get expanded before that happens — preferring larger {@code g} on
+   * ties biases expansion toward states that have made more concrete progress
+   * instead of re-exploring shallower, equally-promising alternatives, which
+   * tends to reduce the number of states explored in practice.
+   */
+  private static final Comparator<double[]> DEFAULT_COMPARATOR =
+    Comparator
+      .comparingDouble((double[] s) -> s[2] + s[3])                 // f = g + h, ascending
+      .thenComparing(Comparator.comparingDouble((double[] s) -> s[2]).reversed()); // tie: larger g first
+
   // ─────────────────────────────────────────────────────────────────────────
   // Public API
   // ─────────────────────────────────────────────────────────────────────────
@@ -54,6 +71,21 @@ public class AStarWaypointOptimizer {
    *         origin index 0 is appended at the end
    */
   public List<Integer> optimize(double[][] costMatrix, RouteMode mode) {
+    return optimize(costMatrix, mode, DEFAULT_COMPARATOR);
+  }
+
+  /**
+   * Same as {@link #optimize(double[][], RouteMode)}, but with the open-set
+   * comparator exposed. Package-private — not part of the public API. Exists so
+   * tests can reproduce the search under a different tie-break rule (e.g. the
+   * plain {@code f = g + h} comparator this class used before tie-breaking was
+   * added) without duplicating the algorithm.
+   *
+   * @param stateComparator orders entries in the open set; the state that
+   *                        compares smallest is expanded next. Each entry is
+   *                        {@code [current, visited, gCost, hCost]}.
+   */
+  List<Integer> optimize(double[][] costMatrix, RouteMode mode, Comparator<double[]> stateComparator) {
     int n = costMatrix.length;
     if (n == 1) {
       return List.of(0);
@@ -66,10 +98,7 @@ public class AStarWaypointOptimizer {
     double[] minIncoming = computeMinIncoming(costMatrix, n);
 
     // ── Priority queue: [current, visited, gCost, hCost] ─────────────────
-    // Priority = gCost + hCost (total f-score)
-    PriorityQueue<double[]> openSet = new PriorityQueue<>(
-      Comparator.comparingDouble(s -> s[2] + s[3])
-    );
+    PriorityQueue<double[]> openSet = new PriorityQueue<>(stateComparator);
 
     // ── Closed set: best gCost found for each (current, visited) state ───
     double[][] bestG = new double[n][allVisited + 1];

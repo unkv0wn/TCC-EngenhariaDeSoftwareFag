@@ -47,13 +47,10 @@ public final class CombinedEmpiricalCostExample {
       TireLifeFromReplacementLogExample.REPLACEMENT_LOG, currentProjectProfile.tireLifeKm()
     );
 
-    VehicleProfile fullyEmpiricalProfile = new VehicleProfile(
-      currentProjectProfile.label() + " (combustível + pneu empíricos)", currentProjectProfile.axleCount(),
-      currentProjectProfile.capacityKg(), currentProjectProfile.capacityM3(),
-      empiricalConsumption, currentProjectProfile.fuelPricePerLiter(),
-      currentProjectProfile.tireReplacementCostPerTire(), empiricalTireLifeKm,
-      currentProjectProfile.driverCostPerHourReais()
-    );
+    VehicleProfile fullyEmpiricalProfile = currentProjectProfile
+      .withLabel(currentProjectProfile.label() + " (combustível + pneu empíricos)")
+      .withFuelConsumption(empiricalConsumption)
+      .withTireLifeKm(empiricalTireLifeKm);
 
     List<WaypointDto> waypoints = ToledoRouteComparisonExample.WAYPOINTS.stream()
       .map(NamedWaypoint::toDto).collect(Collectors.toList());
