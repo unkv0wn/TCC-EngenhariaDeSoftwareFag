@@ -3,6 +3,7 @@ package com.routewise.exception;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -59,6 +60,28 @@ public class GlobalExceptionHandler {
     problem.setDetail("Request body is invalid or missing: " + ex.getMessage());
     log.warn("Malformed request body: {}", ex.getMessage());
     return ResponseEntity.badRequest().body(problem);
+  }
+
+  // ── Resource not found (lookup by id) ─────────────────────────────────────
+
+  @ExceptionHandler(ResourceNotFoundException.class)
+  public ResponseEntity<ProblemDetail> handleNotFound(ResourceNotFoundException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+    problem.setTitle("Resource Not Found");
+    problem.setDetail(ex.getMessage());
+    log.warn("Resource not found: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+  }
+
+  // ── Unique constraint / FK violations ─────────────────────────────────────
+
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+    problem.setTitle("Data Integrity Violation");
+    problem.setDetail("Já existe um registro com esses dados, ou ele ainda está em uso por outro cadastro.");
+    log.warn("Data integrity violation: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
   }
 
   // ── Route computation failure ─────────────────────────────────────────────

@@ -1,36 +1,70 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { ApiError } from "@/lib/apiClient";
 import type { PaymentMethodFormData } from "@/lib/validations/paymentMethod";
+import {
+  createPaymentMethod as createPaymentMethodApi,
+  deletePaymentMethod as deletePaymentMethodApi,
+  listPaymentMethods,
+  updatePaymentMethod as updatePaymentMethodApi,
+} from "@/services/paymentMethods";
 
-export interface PaymentMethod extends PaymentMethodFormData {
+export interface PaymentMethod {
   id: string;
+  name: string;
 }
 
-const INITIAL_PAYMENT_METHODS: PaymentMethod[] = [
-  { id: "dinheiro", name: "Dinheiro" },
-  { id: "pix", name: "Pix" },
-  { id: "cartao-credito", name: "Cartão de Crédito" },
-  { id: "cartao-debito", name: "Cartão de Débito" },
-  { id: "boleto", name: "Boleto" },
-  { id: "transferencia", name: "Transferência Bancária" },
-];
-
 export function usePaymentMethods() {
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(INITIAL_PAYMENT_METHODS);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const createPaymentMethod = useCallback((data: PaymentMethodFormData) => {
-    setPaymentMethods((prev) => [...prev, { ...data, id: crypto.randomUUID() }]);
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setPaymentMethods(await listPaymentMethods());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível carregar as formas de pagamento.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const updatePaymentMethod = useCallback((id: string, data: PaymentMethodFormData) => {
-    setPaymentMethods((prev) => prev.map((method) => (method.id === id ? { ...data, id } : method)));
+  useEffect(() => {
+    // queueMicrotask evita chamar setState de forma síncrona dentro do efeito
+    // (refresh já começa com setIsLoading(true) antes de qualquer await).
+    queueMicrotask(() => {
+      refresh();
+    });
+  }, [refresh]);
+
+  const createPaymentMethod = useCallback(async (data: PaymentMethodFormData) => {
+    const created = await createPaymentMethodApi(data);
+    setPaymentMethods((prev) => [...prev, created]);
+    return created;
   }, []);
 
-  const deletePaymentMethod = useCallback((id: string) => {
+  const updatePaymentMethod = useCallback(async (id: string, data: PaymentMethodFormData) => {
+    const updated = await updatePaymentMethodApi(id, data);
+    setPaymentMethods((prev) => prev.map((method) => (method.id === id ? updated : method)));
+    return updated;
+  }, []);
+
+  const deletePaymentMethod = useCallback(async (id: string) => {
+    await deletePaymentMethodApi(id);
     setPaymentMethods((prev) => prev.filter((method) => method.id !== id));
   }, []);
 
-  return { paymentMethods, createPaymentMethod, updatePaymentMethod, deletePaymentMethod };
+  return {
+    paymentMethods,
+    isLoading,
+    error,
+    refresh,
+    createPaymentMethod,
+    updatePaymentMethod,
+    deletePaymentMethod,
+  };
 }
