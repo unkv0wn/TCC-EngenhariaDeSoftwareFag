@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/payment-methods")
@@ -31,13 +32,13 @@ public class PaymentMethodController {
   }
 
   @PutMapping("/{id}")
-  public PaymentMethodDto update(@PathVariable String id, @Valid @RequestBody PaymentMethodRequestDto request) {
+  public PaymentMethodDto update(@PathVariable UUID id, @Valid @RequestBody PaymentMethodRequestDto request) {
     return service.update(id, request);
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void delete(@PathVariable String id) {
+  public void delete(@PathVariable UUID id) {
     service.delete(id);
   }
 }

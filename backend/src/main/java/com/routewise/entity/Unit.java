@@ -8,14 +8,14 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "units")
 public class Unit {
 
   @Id
-  @Column(length = 40)
-  private String id;
+  private UUID id;
 
   @Column(nullable = false, length = 10)
   private String code;
@@ -35,13 +35,13 @@ public class Unit {
     // JPA
   }
 
-  public Unit(String id, String code, String name) {
+  public Unit(UUID id, String code, String name) {
     this.id = id;
     this.code = code;
     this.name = name;
   }
 
-  public String getId() {
+  public UUID getId() {
     return id;
   }
 

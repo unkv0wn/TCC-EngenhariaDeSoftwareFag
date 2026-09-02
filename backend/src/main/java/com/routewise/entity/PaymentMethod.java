@@ -8,14 +8,14 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "payment_methods")
 public class PaymentMethod {
 
   @Id
-  @Column(length = 40)
-  private String id;
+  private UUID id;
 
   @Column(nullable = false, length = 100)
   private String name;
@@ -32,12 +32,12 @@ public class PaymentMethod {
     // JPA
   }
 
-  public PaymentMethod(String id, String name) {
+  public PaymentMethod(UUID id, String name) {
     this.id = id;
     this.name = name;
   }
 
-  public String getId() {
+  public UUID getId() {
     return id;
   }
 

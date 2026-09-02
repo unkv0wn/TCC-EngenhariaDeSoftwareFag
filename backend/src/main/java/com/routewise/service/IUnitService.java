@@ -4,6 +4,7 @@ import com.routewise.dto.UnitDto;
 import com.routewise.dto.UnitRequestDto;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface IUnitService {
 
@@ -11,7 +12,7 @@ public interface IUnitService {
 
   UnitDto create(UnitRequestDto request);
 
-  UnitDto update(String id, UnitRequestDto request);
+  UnitDto update(UUID id, UnitRequestDto request);
 
-  void delete(String id);
+  void delete(UUID id);
 }

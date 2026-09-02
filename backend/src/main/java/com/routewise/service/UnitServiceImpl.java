@@ -29,12 +29,12 @@ public class UnitServiceImpl implements IUnitService {
 
   @Override
   public UnitDto create(UnitRequestDto request) {
-    Unit entity = new Unit(UUID.randomUUID().toString(), request.code().toUpperCase(), request.name());
+    Unit entity = new Unit(UUID.randomUUID(), request.code().toUpperCase(), request.name());
     return toDto(repository.save(entity));
   }
 
   @Override
-  public UnitDto update(String id, UnitRequestDto request) {
+  public UnitDto update(UUID id, UnitRequestDto request) {
     Unit entity = findOrThrow(id);
     entity.setCode(request.code().toUpperCase());
     entity.setName(request.name());
@@ -42,14 +42,14 @@ public class UnitServiceImpl implements IUnitService {
   }
 
   @Override
-  public void delete(String id) {
+  public void delete(UUID id) {
     if (!repository.existsById(id)) {
       throw new ResourceNotFoundException("Unidade não encontrada: " + id);
     }
     repository.deleteById(id);
   }
 
-  private Unit findOrThrow(String id) {
+  private Unit findOrThrow(UUID id) {
     return repository.findById(id)
       .orElseThrow(() -> new ResourceNotFoundException("Unidade não encontrada: " + id));
   }

@@ -11,6 +11,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -48,6 +49,17 @@ public class GlobalExceptionHandler {
     problem.setTitle("Constraint Violation");
     problem.setDetail(ex.getMessage());
     log.warn("Constraint violation: {}", ex.getMessage());
+    return ResponseEntity.badRequest().body(problem);
+  }
+
+  // ── Malformed path variable (e.g. non-UUID id) ────────────────────────────
+
+  @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+  public ResponseEntity<ProblemDetail> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+    problem.setTitle("Invalid Parameter");
+    problem.setDetail("Valor inválido para '" + ex.getName() + "': " + ex.getValue());
+    log.warn("Type mismatch on parameter {}: {}", ex.getName(), ex.getValue());
     return ResponseEntity.badRequest().body(problem);
   }
 

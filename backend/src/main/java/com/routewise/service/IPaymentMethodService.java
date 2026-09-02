@@ -4,6 +4,7 @@ import com.routewise.dto.PaymentMethodDto;
 import com.routewise.dto.PaymentMethodRequestDto;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface IPaymentMethodService {
 
@@ -11,7 +12,7 @@ public interface IPaymentMethodService {
 
   PaymentMethodDto create(PaymentMethodRequestDto request);
 
-  PaymentMethodDto update(String id, PaymentMethodRequestDto request);
+  PaymentMethodDto update(UUID id, PaymentMethodRequestDto request);
 
-  void delete(String id);
+  void delete(UUID id);
 }

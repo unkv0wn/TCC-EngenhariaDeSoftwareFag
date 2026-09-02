@@ -1,21 +1,20 @@
 -- Formas de pagamento (catálogo referenciado pelos pedidos).
---
--- id é VARCHAR (não UUID gerado pelo banco) de propósito: as linhas de seed abaixo
--- usam os mesmos ids "legíveis" que o mock do front-end já usa (pix, boleto, ...),
--- então o cadastro de Pedidos — que ainda não foi migrado — continua funcionando
--- sem quebrar a referência enquanto a migração avança módulo a módulo.
 CREATE TABLE payment_methods (
-  id         VARCHAR(40)  PRIMARY KEY,
+  id         UUID         PRIMARY KEY,
   name       VARCHAR(100) NOT NULL,
   created_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
   CONSTRAINT uq_payment_methods_name UNIQUE (name)
 );
 
+-- ids fixos (não gerados aleatoriamente aqui) só pra essa seed poder ser referenciada
+-- de forma estável pelo seed mock do front-end (useOrders.ts) enquanto Pedidos ainda
+-- não foi migrado pro backend real. Registros criados pela aplicação usam
+-- UUID.randomUUID() de verdade (ver PaymentMethodServiceImpl).
 INSERT INTO payment_methods (id, name) VALUES
-  ('dinheiro',        'Dinheiro'),
-  ('pix',              'Pix'),
-  ('cartao-credito',   'Cartão de Crédito'),
-  ('cartao-debito',    'Cartão de Débito'),
-  ('boleto',           'Boleto'),
-  ('transferencia',    'Transferência Bancária');
+  ('8f14e45f-ceea-467e-b3a1-9d2e5c0a1001', 'Dinheiro'),
+  ('8f14e45f-ceea-467e-b3a1-9d2e5c0a1002', 'Pix'),
+  ('8f14e45f-ceea-467e-b3a1-9d2e5c0a1003', 'Cartão de Crédito'),
+  ('8f14e45f-ceea-467e-b3a1-9d2e5c0a1004', 'Cartão de Débito'),
+  ('8f14e45f-ceea-467e-b3a1-9d2e5c0a1005', 'Boleto'),
+  ('8f14e45f-ceea-467e-b3a1-9d2e5c0a1006', 'Transferência Bancária');

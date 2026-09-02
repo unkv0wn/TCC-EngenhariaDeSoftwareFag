@@ -29,26 +29,26 @@ public class PaymentMethodServiceImpl implements IPaymentMethodService {
 
   @Override
   public PaymentMethodDto create(PaymentMethodRequestDto request) {
-    PaymentMethod entity = new PaymentMethod(UUID.randomUUID().toString(), request.name());
+    PaymentMethod entity = new PaymentMethod(UUID.randomUUID(), request.name());
     return toDto(repository.save(entity));
   }
 
   @Override
-  public PaymentMethodDto update(String id, PaymentMethodRequestDto request) {
+  public PaymentMethodDto update(UUID id, PaymentMethodRequestDto request) {
     PaymentMethod entity = findOrThrow(id);
     entity.setName(request.name());
     return toDto(repository.save(entity));
   }
 
   @Override
-  public void delete(String id) {
+  public void delete(UUID id) {
     if (!repository.existsById(id)) {
       throw new ResourceNotFoundException("Forma de pagamento não encontrada: " + id);
     }
     repository.deleteById(id);
   }
 
-  private PaymentMethod findOrThrow(String id) {
+  private PaymentMethod findOrThrow(UUID id) {
     return repository.findById(id)
       .orElseThrow(() -> new ResourceNotFoundException("Forma de pagamento não encontrada: " + id));
   }
