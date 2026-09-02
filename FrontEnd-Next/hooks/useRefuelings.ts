@@ -14,7 +14,7 @@ const INITIAL_REFUELINGS: Refueling[] = [
   {
     id: "1",
     vehicleId: "1",
-    driverId: "1",
+    driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3001",
     date: "2026-07-01",
     odometerKm: 15000,
     litersRefueled: 45,
@@ -24,7 +24,7 @@ const INITIAL_REFUELINGS: Refueling[] = [
   {
     id: "2",
     vehicleId: "1",
-    driverId: "1",
+    driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3001",
     date: "2026-07-20",
     odometerKm: 15650,
     litersRefueled: 48,
@@ -34,7 +34,7 @@ const INITIAL_REFUELINGS: Refueling[] = [
   {
     id: "3",
     vehicleId: "2",
-    driverId: "2",
+    driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3002",
     date: "2026-07-10",
     odometerKm: 8200,
     litersRefueled: 38,
@@ -44,7 +44,7 @@ const INITIAL_REFUELINGS: Refueling[] = [
   {
     id: "4",
     vehicleId: "3",
-    driverId: "3",
+    driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3003",
     date: "2026-07-25",
     odometerKm: 22300,
     litersRefueled: 52,
