@@ -1,70 +1,61 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { ApiError } from "@/lib/apiClient";
 import type { VehicleFormData } from "@/lib/validations/vehicle";
+import {
+  createVehicle as createVehicleApi,
+  deleteVehicle as deleteVehicleApi,
+  listVehicles,
+  updateVehicle as updateVehicleApi,
+} from "@/services/vehicles";
 
 export interface Vehicle extends VehicleFormData {
   id: string;
 }
 
-const INITIAL_VEHICLES: Vehicle[] = [
-  {
-    id: "1",
-    plate: "ABC-1234",
-    model: "Sprinter",
-    brand: "Mercedes-Benz",
-    year: 2021,
-    color: "Branco",
-    capacityKg: 1200,
-    fuelType: "diesel",
-  },
-  {
-    id: "2",
-    plate: "XYZ9F45",
-    model: "HR",
-    brand: "Hyundai",
-    year: 2019,
-    color: "Prata",
-    capacityKg: 900,
-    fuelType: "gasolina",
-  },
-  {
-    id: "3",
-    plate: "JJK4C11",
-    model: "Daily",
-    brand: "Iveco",
-    year: 2022,
-    color: "Branco",
-    capacityKg: 1500,
-    fuelType: "diesel",
-  },
-  {
-    id: "4",
-    plate: "QWE7B88",
-    model: "Onix",
-    brand: "Chevrolet",
-    year: 2023,
-    color: "Prata",
-    capacityKg: 450,
-    fuelType: "etanol",
-  },
-];
-
 export function useVehicles() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const createVehicle = useCallback((data: VehicleFormData) => {
-    setVehicles((prev) => [...prev, { ...data, id: crypto.randomUUID() }]);
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setVehicles(await listVehicles());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível carregar os veículos.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const updateVehicle = useCallback((id: string, data: VehicleFormData) => {
-    setVehicles((prev) => prev.map((vehicle) => (vehicle.id === id ? { ...data, id } : vehicle)));
+  useEffect(() => {
+    // queueMicrotask evita chamar setState de forma síncrona dentro do efeito
+    // (refresh já começa com setIsLoading(true) antes de qualquer await).
+    queueMicrotask(() => {
+      refresh();
+    });
+  }, [refresh]);
+
+  const createVehicle = useCallback(async (data: VehicleFormData) => {
+    const created = await createVehicleApi(data);
+    setVehicles((prev) => [...prev, created]);
+    return created;
   }, []);
 
-  const deleteVehicle = useCallback((id: string) => {
+  const updateVehicle = useCallback(async (id: string, data: VehicleFormData) => {
+    const updated = await updateVehicleApi(id, data);
+    setVehicles((prev) => prev.map((vehicle) => (vehicle.id === id ? updated : vehicle)));
+    return updated;
+  }, []);
+
+  const deleteVehicle = useCallback(async (id: string) => {
+    await deleteVehicleApi(id);
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== id));
   }, []);
 
-  return { vehicles, createVehicle, updateVehicle, deleteVehicle };
+  return { vehicles, isLoading, error, refresh, createVehicle, updateVehicle, deleteVehicle };
 }

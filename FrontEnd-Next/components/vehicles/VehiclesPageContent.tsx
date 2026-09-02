@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
@@ -15,10 +16,18 @@ import { VehicleTable } from "@/components/vehicles/VehicleTable";
 import { useVehicles, type Vehicle } from "@/hooks/useVehicles";
 import { useRefuelings } from "@/hooks/useRefuelings";
 import { useToast } from "@/hooks/useToast";
+import { ApiError } from "@/lib/apiClient";
 import type { VehicleFormData } from "@/lib/validations/vehicle";
 
 export function VehiclesPageContent() {
-  const { vehicles, createVehicle, updateVehicle, deleteVehicle } = useVehicles();
+  const {
+    vehicles,
+    isLoading,
+    error: loadError,
+    createVehicle,
+    updateVehicle,
+    deleteVehicle,
+  } = useVehicles();
   const { refuelings } = useRefuelings();
   const { success, error } = useToast();
   const [view, setView] = useState<ListView>("cards");
@@ -52,7 +61,7 @@ export function VehiclesPageContent() {
     setFormVehicle(null);
   }
 
-  function handleSubmit(data: VehicleFormData) {
+  async function handleSubmit(data: VehicleFormData) {
     const isDuplicatePlate = vehicles.some(
       (vehicle) => vehicle.plate === data.plate && vehicle.id !== formVehicle?.id
     );
@@ -61,14 +70,18 @@ export function VehiclesPageContent() {
       return;
     }
 
-    if (formVehicle) {
-      updateVehicle(formVehicle.id, data);
-      success("Veículo atualizado", `${data.plate} foi atualizado com sucesso.`);
-    } else {
-      createVehicle(data);
-      success("Veículo cadastrado", `${data.plate} foi adicionado à frota.`);
+    try {
+      if (formVehicle) {
+        await updateVehicle(formVehicle.id, data);
+        success("Veículo atualizado", `${data.plate} foi atualizado com sucesso.`);
+      } else {
+        await createVehicle(data);
+        success("Veículo cadastrado", `${data.plate} foi adicionado à frota.`);
+      }
+      closeForm();
+    } catch (err) {
+      error("Não foi possível salvar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
     }
-    closeForm();
   }
 
   function handleDeleteClick(vehicle: Vehicle) {
@@ -100,7 +113,11 @@ export function VehiclesPageContent() {
           label="Buscar veículo"
         />
 
-        {filteredVehicles.length === 0 ? (
+        {isLoading ? (
+          <LoadingState message="Carregando veículos..." />
+        ) : loadError ? (
+          <EmptyState message={loadError} />
+        ) : filteredVehicles.length === 0 ? (
           <EmptyState
             message={
               search
@@ -121,10 +138,15 @@ export function VehiclesPageContent() {
         <DeleteVehicleDialog
           vehicle={vehicleToDelete}
           onCancel={() => setVehicleToDelete(null)}
-          onConfirm={() => {
-            deleteVehicle(vehicleToDelete.id);
-            success("Veículo excluído", `${vehicleToDelete.plate} foi removido.`);
-            setVehicleToDelete(null);
+          onConfirm={async () => {
+            try {
+              await deleteVehicle(vehicleToDelete.id);
+              success("Veículo excluído", `${vehicleToDelete.plate} foi removido.`);
+            } catch (err) {
+              error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+            } finally {
+              setVehicleToDelete(null);
+            }
           }}
         />
       )}

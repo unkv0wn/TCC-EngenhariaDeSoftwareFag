@@ -26,7 +26,7 @@ const INITIAL_ORDERS: Order[] = [
   {
     id: "1",
     customerId: "1",
-    vehicleId: "1",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4001",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3001",
     paymentMethodId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a1002",
     paymentConditionId: "avista",
@@ -49,7 +49,7 @@ const INITIAL_ORDERS: Order[] = [
   {
     id: "2",
     customerId: "2",
-    vehicleId: "3",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4003",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3002",
     paymentMethodId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a1005",
     paymentConditionId: "30-60",
@@ -68,7 +68,7 @@ const INITIAL_ORDERS: Order[] = [
   {
     id: "3",
     customerId: "5",
-    vehicleId: "2",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4002",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3001",
     paymentMethodId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a1003",
     paymentConditionId: "3x-sem-juros",
@@ -86,7 +86,7 @@ const INITIAL_ORDERS: Order[] = [
   {
     id: "4",
     customerId: "3",
-    vehicleId: "1",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4001",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3002",
     paymentMethodId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a1002",
     paymentConditionId: "avista",
@@ -104,7 +104,7 @@ const INITIAL_ORDERS: Order[] = [
   {
     id: "5",
     customerId: "6",
-    vehicleId: "3",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4003",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3001",
     paymentMethodId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a1005",
     paymentConditionId: "30-60",
@@ -122,7 +122,7 @@ const INITIAL_ORDERS: Order[] = [
   {
     id: "6",
     customerId: "1",
-    vehicleId: "2",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4002",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3002",
     paymentMethodId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a1003",
     paymentConditionId: "3x-sem-juros",

@@ -13,7 +13,7 @@ export interface Refueling extends RefuelingFormData {
 const INITIAL_REFUELINGS: Refueling[] = [
   {
     id: "1",
-    vehicleId: "1",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4001",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3001",
     date: "2026-07-01",
     odometerKm: 15000,
@@ -23,7 +23,7 @@ const INITIAL_REFUELINGS: Refueling[] = [
   },
   {
     id: "2",
-    vehicleId: "1",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4001",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3001",
     date: "2026-07-20",
     odometerKm: 15650,
@@ -33,7 +33,7 @@ const INITIAL_REFUELINGS: Refueling[] = [
   },
   {
     id: "3",
-    vehicleId: "2",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4002",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3002",
     date: "2026-07-10",
     odometerKm: 8200,
@@ -43,7 +43,7 @@ const INITIAL_REFUELINGS: Refueling[] = [
   },
   {
     id: "4",
-    vehicleId: "3",
+    vehicleId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a4003",
     driverId: "8f14e45f-ceea-467e-b3a1-9d2e5c0a3003",
     date: "2026-07-25",
     odometerKm: 22300,
