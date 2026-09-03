@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { RefuelingFormModal } from "@/components/refuelings/RefuelingFormModal";
@@ -15,12 +16,20 @@ import { useDrivers } from "@/hooks/useDrivers";
 import { useRefuelings, type Refueling } from "@/hooks/useRefuelings";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
+import { ApiError } from "@/lib/apiClient";
 import { formatDate } from "@/lib/format";
 import { findLatestOdometer } from "@/lib/refuelingCalculations";
 import type { RefuelingFormData } from "@/lib/validations/refueling";
 
 export function RefuelingsPageContent() {
-  const { refuelings, createRefueling, updateRefueling, deleteRefueling } = useRefuelings();
+  const {
+    refuelings,
+    isLoading,
+    error: loadError,
+    createRefueling,
+    updateRefueling,
+    deleteRefueling,
+  } = useRefuelings();
   const { vehicles } = useVehicles();
   const { drivers } = useDrivers();
   const { success, error } = useToast();
@@ -58,7 +67,7 @@ export function RefuelingsPageContent() {
     setFormRefueling(null);
   }
 
-  function handleSubmit(data: RefuelingFormData) {
+  async function handleSubmit(data: RefuelingFormData) {
     const previousOdometerKm = findLatestOdometer(refuelings, data.vehicleId, formRefueling?.id);
     if (previousOdometerKm !== null && data.odometerKm <= previousOdometerKm) {
       error(
@@ -68,14 +77,18 @@ export function RefuelingsPageContent() {
       return;
     }
 
-    if (formRefueling) {
-      updateRefueling(formRefueling.id, data);
-      success("Abastecimento atualizado", "O registro foi atualizado com sucesso.");
-    } else {
-      createRefueling(data);
-      success("Abastecimento cadastrado", "O registro foi adicionado.");
+    try {
+      if (formRefueling) {
+        await updateRefueling(formRefueling.id, data);
+        success("Abastecimento atualizado", "O registro foi atualizado com sucesso.");
+      } else {
+        await createRefueling(data);
+        success("Abastecimento cadastrado", "O registro foi adicionado.");
+      }
+      closeForm();
+    } catch (err) {
+      error("Não foi possível salvar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
     }
-    closeForm();
   }
 
   return (
@@ -99,7 +112,11 @@ export function RefuelingsPageContent() {
           <VehicleFilterSelect vehicles={vehicles} value={vehicleFilter} onChange={setVehicleFilter} />
         </div>
 
-        {filteredRefuelings.length === 0 ? (
+        {isLoading ? (
+          <LoadingState message="Carregando abastecimentos..." />
+        ) : loadError ? (
+          <EmptyState message={loadError} />
+        ) : filteredRefuelings.length === 0 ? (
           <EmptyState
             message={
               search || vehicleFilter !== ALL_VEHICLES_VALUE
@@ -143,10 +160,15 @@ export function RefuelingsPageContent() {
           }
           confirmLabel="Excluir"
           onCancel={() => setRefuelingToDelete(null)}
-          onConfirm={() => {
-            deleteRefueling(refuelingToDelete.id);
-            success("Abastecimento excluído", "O registro foi removido.");
-            setRefuelingToDelete(null);
+          onConfirm={async () => {
+            try {
+              await deleteRefueling(refuelingToDelete.id);
+              success("Abastecimento excluído", "O registro foi removido.");
+            } catch (err) {
+              error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+            } finally {
+              setRefuelingToDelete(null);
+            }
           }}
         />
       )}
