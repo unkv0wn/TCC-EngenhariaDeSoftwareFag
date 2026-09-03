@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { Driver } from "@/hooks/useDrivers";
 import { maskCpf, maskPhone } from "@/lib/masks";
 import { CNH_CATEGORIES, DRIVER_STATUSES, driverSchema, type DriverFormData } from "@/lib/validations/driver";
@@ -35,6 +35,7 @@ export function DriverFormModal({ driver, onClose, onSubmit }: DriverFormModalPr
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors },
   } = useForm<DriverFormData>({
     resolver: zodResolver(driverSchema),
@@ -81,12 +82,20 @@ export function DriverFormModal({ driver, onClose, onSubmit }: DriverFormModalPr
             error={errors.cnhNumber?.message}
             {...register("cnhNumber")}
           />
-          <Select
-            label="Categoria da CNH"
-            placeholder="Selecione..."
-            options={CNH_CATEGORIES}
-            error={errors.cnhCategory?.message}
-            {...register("cnhCategory")}
+          <Controller
+            name="cnhCategory"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="Categoria da CNH"
+                placeholder="Selecione..."
+                options={CNH_CATEGORIES}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.cnhCategory?.message}
+              />
+            )}
           />
         </div>
 
@@ -97,7 +106,21 @@ export function DriverFormModal({ driver, onClose, onSubmit }: DriverFormModalPr
             error={errors.cnhValidity?.message}
             {...register("cnhValidity")}
           />
-          <Select label="Status" options={DRIVER_STATUSES} error={errors.status?.message} {...register("status")} />
+          <Controller
+            name="status"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="Status"
+                placeholder="Selecione..."
+                options={DRIVER_STATUSES}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.status?.message}
+              />
+            )}
+          />
         </div>
 
         <div className="mt-2 flex justify-end gap-2.5 border-t border-gray-100 pt-4">

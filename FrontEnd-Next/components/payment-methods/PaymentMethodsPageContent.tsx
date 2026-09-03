@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { PaymentMethodFormModal } from "@/components/payment-methods/PaymentMethodFormModal";
@@ -13,10 +14,18 @@ import { PaymentMethodTable } from "@/components/payment-methods/PaymentMethodTa
 import { useOrders } from "@/hooks/useOrders";
 import { usePaymentMethods, type PaymentMethod } from "@/hooks/usePaymentMethods";
 import { useToast } from "@/hooks/useToast";
+import { ApiError } from "@/lib/apiClient";
 import type { PaymentMethodFormData } from "@/lib/validations/paymentMethod";
 
 export function PaymentMethodsPageContent() {
-  const { paymentMethods, createPaymentMethod, updatePaymentMethod, deletePaymentMethod } = usePaymentMethods();
+  const {
+    paymentMethods,
+    isLoading,
+    error: loadError,
+    createPaymentMethod,
+    updatePaymentMethod,
+    deletePaymentMethod,
+  } = usePaymentMethods();
   const { orders } = useOrders();
   const { success, error } = useToast();
   const [search, setSearch] = useState("");
@@ -45,7 +54,7 @@ export function PaymentMethodsPageContent() {
     setFormPaymentMethod(null);
   }
 
-  function handleSubmit(data: PaymentMethodFormData) {
+  async function handleSubmit(data: PaymentMethodFormData) {
     const isDuplicate = paymentMethods.some(
       (method) => method.name === data.name && method.id !== formPaymentMethod?.id
     );
@@ -54,14 +63,18 @@ export function PaymentMethodsPageContent() {
       return;
     }
 
-    if (formPaymentMethod) {
-      updatePaymentMethod(formPaymentMethod.id, data);
-      success("Forma de pagamento atualizada", `${data.name} foi atualizada com sucesso.`);
-    } else {
-      createPaymentMethod(data);
-      success("Forma de pagamento cadastrada", `${data.name} foi adicionada.`);
+    try {
+      if (formPaymentMethod) {
+        await updatePaymentMethod(formPaymentMethod.id, data);
+        success("Forma de pagamento atualizada", `${data.name} foi atualizada com sucesso.`);
+      } else {
+        await createPaymentMethod(data);
+        success("Forma de pagamento cadastrada", `${data.name} foi adicionada.`);
+      }
+      closeForm();
+    } catch (err) {
+      error("Não foi possível salvar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
     }
-    closeForm();
   }
 
   function handleDeleteClick(paymentMethod: PaymentMethod) {
@@ -92,7 +105,11 @@ export function PaymentMethodsPageContent() {
           label="Buscar forma de pagamento"
         />
 
-        {filteredPaymentMethods.length === 0 ? (
+        {isLoading ? (
+          <LoadingState message="Carregando formas de pagamento..." />
+        ) : loadError ? (
+          <EmptyState message={loadError} />
+        ) : filteredPaymentMethods.length === 0 ? (
           <EmptyState
             message={
               search
@@ -121,10 +138,15 @@ export function PaymentMethodsPageContent() {
           }
           confirmLabel="Excluir"
           onCancel={() => setPaymentMethodToDelete(null)}
-          onConfirm={() => {
-            deletePaymentMethod(paymentMethodToDelete.id);
-            success("Forma de pagamento excluída", `${paymentMethodToDelete.name} foi removida.`);
-            setPaymentMethodToDelete(null);
+          onConfirm={async () => {
+            try {
+              await deletePaymentMethod(paymentMethodToDelete.id);
+              success("Forma de pagamento excluída", `${paymentMethodToDelete.name} foi removida.`);
+            } catch (err) {
+              error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+            } finally {
+              setPaymentMethodToDelete(null);
+            }
           }}
         />
       )}

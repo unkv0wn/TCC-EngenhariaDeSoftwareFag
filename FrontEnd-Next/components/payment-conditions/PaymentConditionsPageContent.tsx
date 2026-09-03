@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { PaymentConditionFormModal } from "@/components/payment-conditions/PaymentConditionFormModal";
@@ -13,11 +14,18 @@ import { PaymentConditionTable } from "@/components/payment-conditions/PaymentCo
 import { useOrders } from "@/hooks/useOrders";
 import { usePaymentConditions, type PaymentCondition } from "@/hooks/usePaymentConditions";
 import { useToast } from "@/hooks/useToast";
+import { ApiError } from "@/lib/apiClient";
 import type { PaymentConditionFormData } from "@/lib/validations/paymentCondition";
 
 export function PaymentConditionsPageContent() {
-  const { paymentConditions, createPaymentCondition, updatePaymentCondition, deletePaymentCondition } =
-    usePaymentConditions();
+  const {
+    paymentConditions,
+    isLoading,
+    error: loadError,
+    createPaymentCondition,
+    updatePaymentCondition,
+    deletePaymentCondition,
+  } = usePaymentConditions();
   const { orders } = useOrders();
   const { success, error } = useToast();
   const [search, setSearch] = useState("");
@@ -46,7 +54,7 @@ export function PaymentConditionsPageContent() {
     setFormPaymentCondition(null);
   }
 
-  function handleSubmit(data: PaymentConditionFormData) {
+  async function handleSubmit(data: PaymentConditionFormData) {
     const isDuplicate = paymentConditions.some(
       (condition) => condition.name === data.name && condition.id !== formPaymentCondition?.id
     );
@@ -55,14 +63,18 @@ export function PaymentConditionsPageContent() {
       return;
     }
 
-    if (formPaymentCondition) {
-      updatePaymentCondition(formPaymentCondition.id, data);
-      success("Condição atualizada", `${data.name} foi atualizada com sucesso.`);
-    } else {
-      createPaymentCondition(data);
-      success("Condição cadastrada", `${data.name} foi adicionada.`);
+    try {
+      if (formPaymentCondition) {
+        await updatePaymentCondition(formPaymentCondition.id, data);
+        success("Condição atualizada", `${data.name} foi atualizada com sucesso.`);
+      } else {
+        await createPaymentCondition(data);
+        success("Condição cadastrada", `${data.name} foi adicionada.`);
+      }
+      closeForm();
+    } catch (err) {
+      error("Não foi possível salvar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
     }
-    closeForm();
   }
 
   function handleDeleteClick(paymentCondition: PaymentCondition) {
@@ -93,7 +105,11 @@ export function PaymentConditionsPageContent() {
           label="Buscar condição de pagamento"
         />
 
-        {filteredPaymentConditions.length === 0 ? (
+        {isLoading ? (
+          <LoadingState message="Carregando condições de pagamento..." />
+        ) : loadError ? (
+          <EmptyState message={loadError} />
+        ) : filteredPaymentConditions.length === 0 ? (
           <EmptyState
             message={
               search
@@ -130,10 +146,15 @@ export function PaymentConditionsPageContent() {
           }
           confirmLabel="Excluir"
           onCancel={() => setPaymentConditionToDelete(null)}
-          onConfirm={() => {
-            deletePaymentCondition(paymentConditionToDelete.id);
-            success("Condição excluída", `${paymentConditionToDelete.name} foi removida.`);
-            setPaymentConditionToDelete(null);
+          onConfirm={async () => {
+            try {
+              await deletePaymentCondition(paymentConditionToDelete.id);
+              success("Condição excluída", `${paymentConditionToDelete.name} foi removida.`);
+            } catch (err) {
+              error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+            } finally {
+              setPaymentConditionToDelete(null);
+            }
           }}
         />
       )}

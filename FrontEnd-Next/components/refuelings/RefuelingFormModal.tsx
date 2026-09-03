@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { Driver } from "@/hooks/useDrivers";
 import type { Refueling } from "@/hooks/useRefuelings";
 import type { Vehicle } from "@/hooks/useVehicles";
@@ -45,6 +45,7 @@ export function RefuelingFormModal({
     handleSubmit,
     reset,
     watch,
+    control,
     formState: { errors },
   } = useForm<RefuelingFormData>({
     resolver: zodResolver(refuelingSchema),
@@ -79,19 +80,35 @@ export function RefuelingFormModal({
     <Modal title={isEditing ? "Editar abastecimento" : "Novo abastecimento"} onClose={onClose} size="lg">
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4 px-6 py-5">
         <div className="grid grid-cols-2 gap-3">
-          <Select
-            label="Veículo"
-            placeholder="Selecione..."
-            options={vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.plate} — ${vehicle.model}` }))}
-            error={errors.vehicleId?.message}
-            {...register("vehicleId")}
+          <Controller
+            name="vehicleId"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="Veículo"
+                placeholder="Selecione..."
+                options={vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.plate} — ${vehicle.model}` }))}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.vehicleId?.message}
+              />
+            )}
           />
-          <Select
-            label="Motorista"
-            placeholder="Selecione..."
-            options={drivers.map((driver) => ({ value: driver.id, label: driver.fullName }))}
-            error={errors.driverId?.message}
-            {...register("driverId")}
+          <Controller
+            name="driverId"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="Motorista"
+                placeholder="Selecione..."
+                options={drivers.map((driver) => ({ value: driver.id, label: driver.fullName }))}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.driverId?.message}
+              />
+            )}
           />
         </div>
 

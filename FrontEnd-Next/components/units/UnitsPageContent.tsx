@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { UnitFormModal } from "@/components/units/UnitFormModal";
@@ -13,10 +14,11 @@ import { UnitTable } from "@/components/units/UnitTable";
 import { useProducts } from "@/hooks/useProducts";
 import { useUnits, type Unit } from "@/hooks/useUnits";
 import { useToast } from "@/hooks/useToast";
+import { ApiError } from "@/lib/apiClient";
 import type { UnitFormData } from "@/lib/validations/unit";
 
 export function UnitsPageContent() {
-  const { units, createUnit, updateUnit, deleteUnit } = useUnits();
+  const { units, isLoading, error: loadError, createUnit, updateUnit, deleteUnit } = useUnits();
   const { products } = useProducts();
   const { success, error } = useToast();
   const [search, setSearch] = useState("");
@@ -45,7 +47,7 @@ export function UnitsPageContent() {
     setFormUnit(null);
   }
 
-  function handleSubmit(data: UnitFormData) {
+  async function handleSubmit(data: UnitFormData) {
     const isDuplicate = units.some(
       (unit) =>
         (unit.code === data.code || unit.name === data.name) && unit.id !== formUnit?.id
@@ -55,14 +57,18 @@ export function UnitsPageContent() {
       return;
     }
 
-    if (formUnit) {
-      updateUnit(formUnit.id, data);
-      success("Unidade atualizada", `${data.name} foi atualizada com sucesso.`);
-    } else {
-      createUnit(data);
-      success("Unidade cadastrada", `${data.name} foi adicionada.`);
+    try {
+      if (formUnit) {
+        await updateUnit(formUnit.id, data);
+        success("Unidade atualizada", `${data.name} foi atualizada com sucesso.`);
+      } else {
+        await createUnit(data);
+        success("Unidade cadastrada", `${data.name} foi adicionada.`);
+      }
+      closeForm();
+    } catch (err) {
+      error("Não foi possível salvar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
     }
-    closeForm();
   }
 
   function handleDeleteClick(unit: Unit) {
@@ -93,7 +99,11 @@ export function UnitsPageContent() {
           label="Buscar unidade"
         />
 
-        {filteredUnits.length === 0 ? (
+        {isLoading ? (
+          <LoadingState message="Carregando unidades..." />
+        ) : loadError ? (
+          <EmptyState message={loadError} />
+        ) : filteredUnits.length === 0 ? (
           <EmptyState
             message={
               search
@@ -119,10 +129,15 @@ export function UnitsPageContent() {
           }
           confirmLabel="Excluir"
           onCancel={() => setUnitToDelete(null)}
-          onConfirm={() => {
-            deleteUnit(unitToDelete.id);
-            success("Unidade excluída", `${unitToDelete.name} foi removida.`);
-            setUnitToDelete(null);
+          onConfirm={async () => {
+            try {
+              await deleteUnit(unitToDelete.id);
+              success("Unidade excluída", `${unitToDelete.name} foi removida.`);
+            } catch (err) {
+              error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+            } finally {
+              setUnitToDelete(null);
+            }
           }}
         />
       )}

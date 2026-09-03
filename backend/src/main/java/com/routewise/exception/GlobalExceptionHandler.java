@@ -3,6 +3,7 @@ package com.routewise.exception;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -10,6 +11,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -50,6 +52,17 @@ public class GlobalExceptionHandler {
     return ResponseEntity.badRequest().body(problem);
   }
 
+  // ── Malformed path variable (e.g. non-UUID id) ────────────────────────────
+
+  @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+  public ResponseEntity<ProblemDetail> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+    problem.setTitle("Invalid Parameter");
+    problem.setDetail("Valor inválido para '" + ex.getName() + "': " + ex.getValue());
+    log.warn("Type mismatch on parameter {}: {}", ex.getName(), ex.getValue());
+    return ResponseEntity.badRequest().body(problem);
+  }
+
   // ── Unreadable request body ───────────────────────────────────────────────
 
   @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -59,6 +72,39 @@ public class GlobalExceptionHandler {
     problem.setDetail("Request body is invalid or missing: " + ex.getMessage());
     log.warn("Malformed request body: {}", ex.getMessage());
     return ResponseEntity.badRequest().body(problem);
+  }
+
+  // ── Resource not found (lookup by id) ─────────────────────────────────────
+
+  @ExceptionHandler(ResourceNotFoundException.class)
+  public ResponseEntity<ProblemDetail> handleNotFound(ResourceNotFoundException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+    problem.setTitle("Resource Not Found");
+    problem.setDetail(ex.getMessage());
+    log.warn("Resource not found: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+  }
+
+  // ── Unique constraint / FK violations ─────────────────────────────────────
+
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+    problem.setTitle("Data Integrity Violation");
+    problem.setDetail("Já existe um registro com esses dados, ou ele ainda está em uso por outro cadastro.");
+    log.warn("Data integrity violation: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+  }
+
+  // ── Invalid order status transition ───────────────────────────────────────
+
+  @ExceptionHandler(InvalidOrderStatusTransitionException.class)
+  public ResponseEntity<ProblemDetail> handleInvalidStatusTransition(InvalidOrderStatusTransitionException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+    problem.setTitle("Invalid Status Transition");
+    problem.setDetail(ex.getMessage());
+    log.warn("Invalid order status transition: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
   }
 
   // ── Route computation failure ─────────────────────────────────────────────

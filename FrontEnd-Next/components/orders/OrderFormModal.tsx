@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useFieldArray, useForm, type FieldErrors } from "react-hook-form";
+import { Controller, useFieldArray, useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Textarea } from "@/components/ui/Textarea";
 import type { Customer } from "@/hooks/useCustomers";
 import type { Driver } from "@/hooks/useDrivers";
@@ -17,8 +17,13 @@ import type { PaymentCondition } from "@/hooks/usePaymentConditions";
 import type { PaymentMethod } from "@/hooks/usePaymentMethods";
 import type { Product } from "@/hooks/useProducts";
 import type { Vehicle } from "@/hooks/useVehicles";
-import { formatCurrency, formatDateTime, formatWeight } from "@/lib/format";
-import { calculateOrderSubtotal, calculateOrderTotal, calculateOrderWeightKg } from "@/lib/orderCalculations";
+import { formatCurrency, formatDate, formatDateTime, formatWeight } from "@/lib/format";
+import {
+  calculateInstallments,
+  calculateOrderSubtotal,
+  calculateOrderTotal,
+  calculateOrderWeightKg,
+} from "@/lib/orderCalculations";
 import { cn } from "@/lib/utils";
 import { ORDER_STATUSES, orderSchema, type OrderFormData } from "@/lib/validations/order";
 
@@ -36,17 +41,10 @@ const EMPTY_VALUES: OrderFormData = {
   notes: "",
 };
 
-const DETAIL_FIELDS = [
-  "customerId",
-  "vehicleId",
-  "driverId",
-  "paymentMethodId",
-  "paymentConditionId",
-  "date",
-  "notes",
-] as const;
+const CLIENT_FIELDS = ["customerId", "vehicleId", "driverId", "date", "notes"] as const;
+const PAYMENT_FIELDS = ["paymentMethodId", "paymentConditionId"] as const;
 
-type Tab = "detalhes" | "itens";
+type Tab = "cliente" | "itens" | "pagamento";
 
 interface OrderFormModalProps {
   order: Order | null;
@@ -72,7 +70,7 @@ export function OrderFormModal({
   onSubmit,
 }: OrderFormModalProps) {
   const isEditing = order !== null;
-  const [activeTab, setActiveTab] = useState<Tab>("detalhes");
+  const [activeTab, setActiveTab] = useState<Tab>("cliente");
 
   const {
     register,
@@ -89,15 +87,17 @@ export function OrderFormModal({
 
   useEffect(() => {
     reset(order ?? EMPTY_VALUES);
-    setActiveTab("detalhes");
+    setActiveTab("cliente");
   }, [order, reset]);
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
   const items = watch("items");
   const vehicleId = watch("vehicleId");
+  const date = watch("date");
   const discount = watch("discount");
   const shippingCost = watch("shippingCost");
+  const paymentConditionId = watch("paymentConditionId");
 
   const subtotalPreview = calculateOrderSubtotal(items);
   const totalPreview = calculateOrderTotal(items, discount, shippingCost);
@@ -105,8 +105,14 @@ export function OrderFormModal({
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === vehicleId);
   const isOverCapacity = !!selectedVehicle && weightPreviewKg > selectedVehicle.capacityKg;
 
-  const detailsHasError = DETAIL_FIELDS.some((field) => errors[field]);
+  const selectedPaymentCondition = paymentConditions.find((condition) => condition.id === paymentConditionId);
+  const installments = selectedPaymentCondition
+    ? calculateInstallments(totalPreview, selectedPaymentCondition.installments, selectedPaymentCondition.intervalDays, date)
+    : [];
+
+  const clientHasError = CLIENT_FIELDS.some((field) => errors[field]);
   const itemsHasError = !!errors.items || !!errors.discount || !!errors.shippingCost;
+  const paymentHasError = PAYMENT_FIELDS.some((field) => errors[field]);
 
   function handleProductChange(index: number, productId: string) {
     const product = products.find((candidate) => candidate.id === productId);
@@ -116,65 +122,78 @@ export function OrderFormModal({
   }
 
   function onInvalid(formErrors: FieldErrors<OrderFormData>) {
-    const hasDetailError = DETAIL_FIELDS.some((field) => formErrors[field]);
-    setActiveTab(hasDetailError ? "detalhes" : "itens");
+    if (CLIENT_FIELDS.some((field) => formErrors[field])) {
+      setActiveTab("cliente");
+    } else if (formErrors.items || formErrors.discount || formErrors.shippingCost) {
+      setActiveTab("itens");
+    } else {
+      setActiveTab("pagamento");
+    }
   }
 
   return (
     <Modal title={isEditing ? "Editar pedido" : "Novo pedido"} onClose={onClose} size="lg">
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="flex flex-col">
-        <div className="grid grid-cols-2 border-b border-gray-100 px-6">
-          <TabButton label="Detalhes" active={activeTab === "detalhes"} hasError={detailsHasError} onClick={() => setActiveTab("detalhes")} />
+        <div className="grid grid-cols-3 border-b border-gray-100 px-6">
+          <TabButton label="Cliente" active={activeTab === "cliente"} hasError={clientHasError} onClick={() => setActiveTab("cliente")} />
+          <TabButton label="Itens" active={activeTab === "itens"} hasError={itemsHasError} onClick={() => setActiveTab("itens")} />
           <TabButton
-            label="Itens e valores"
-            active={activeTab === "itens"}
-            hasError={itemsHasError}
-            onClick={() => setActiveTab("itens")}
+            label="Pagamento"
+            active={activeTab === "pagamento"}
+            hasError={paymentHasError}
+            onClick={() => setActiveTab("pagamento")}
           />
         </div>
 
         <div className="flex flex-col gap-4 px-6 py-5">
-          {activeTab === "detalhes" && (
+          {activeTab === "cliente" && (
             <>
-              <Select
-                label="Cliente"
-                placeholder="Selecione..."
-                options={customers.map((customer) => ({ value: customer.id, label: customer.name }))}
-                error={errors.customerId?.message}
-                {...register("customerId")}
+              <Controller
+                name="customerId"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Cliente"
+                    placeholder="Selecione..."
+                    options={customers.map((customer) => ({ value: customer.id, label: customer.name }))}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    error={errors.customerId?.message}
+                  />
+                )}
               />
 
               <div className="grid grid-cols-2 gap-3">
-                <Select
-                  label="Veículo"
-                  placeholder="Selecione..."
-                  options={vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.plate} — ${vehicle.model}` }))}
-                  error={errors.vehicleId?.message}
-                  {...register("vehicleId")}
+                <Controller
+                  name="vehicleId"
+                  control={control}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      label="Veículo"
+                      placeholder="Selecione..."
+                      options={vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.plate} — ${vehicle.model}` }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      error={errors.vehicleId?.message}
+                    />
+                  )}
                 />
-                <Select
-                  label="Motorista"
-                  placeholder="Selecione..."
-                  options={drivers.map((driver) => ({ value: driver.id, label: driver.fullName }))}
-                  error={errors.driverId?.message}
-                  {...register("driverId")}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Select
-                  label="Forma de pagamento"
-                  placeholder="Selecione..."
-                  options={paymentMethods.map((method) => ({ value: method.id, label: method.name }))}
-                  error={errors.paymentMethodId?.message}
-                  {...register("paymentMethodId")}
-                />
-                <Select
-                  label="Condição de pagamento"
-                  placeholder="Selecione..."
-                  options={paymentConditions.map((condition) => ({ value: condition.id, label: condition.name }))}
-                  error={errors.paymentConditionId?.message}
-                  {...register("paymentConditionId")}
+                <Controller
+                  name="driverId"
+                  control={control}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      label="Motorista"
+                      placeholder="Selecione..."
+                      options={drivers.map((driver) => ({ value: driver.id, label: driver.fullName }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      error={errors.driverId?.message}
+                    />
+                  )}
                 />
               </div>
 
@@ -224,14 +243,23 @@ export function OrderFormModal({
                   {fields.map((field, index) => (
                     <div key={field.id} className="flex items-start gap-2">
                       <div className="min-w-0 flex-[2]">
-                        <Select
-                          label=""
-                          placeholder="Selecione..."
-                          options={products.map((product) => ({ value: product.id, label: product.name }))}
-                          error={errors.items?.[index]?.productId?.message}
-                          {...register(`items.${index}.productId` as const, {
-                            onChange: (event) => handleProductChange(index, event.target.value),
-                          })}
+                        <Controller
+                          name={`items.${index}.productId` as const}
+                          control={control}
+                          render={({ field }) => (
+                            <SearchableSelect
+                              label=""
+                              placeholder="Selecione..."
+                              options={products.map((product) => ({ value: product.id, label: product.name }))}
+                              value={field.value}
+                              onChange={(newValue) => {
+                                field.onChange(newValue);
+                                handleProductChange(index, newValue);
+                              }}
+                              onBlur={field.onBlur}
+                              error={errors.items?.[index]?.productId?.message}
+                            />
+                          )}
                         />
                       </div>
                       <div className="w-20">
@@ -303,6 +331,66 @@ export function OrderFormModal({
                   <p role="alert" className="text-xs font-bold text-danger-600">
                     O peso total excede a capacidade do veículo selecionado.
                   </p>
+                )}
+              </div>
+            </>
+          )}
+
+          {activeTab === "pagamento" && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Controller
+                  name="paymentMethodId"
+                  control={control}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      label="Forma de pagamento"
+                      placeholder="Selecione..."
+                      options={paymentMethods.map((method) => ({ value: method.id, label: method.name }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      error={errors.paymentMethodId?.message}
+                    />
+                  )}
+                />
+                <Controller
+                  name="paymentConditionId"
+                  control={control}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      label="Condição de pagamento"
+                      placeholder="Selecione..."
+                      options={paymentConditions.map((condition) => ({ value: condition.id, label: condition.name }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      error={errors.paymentConditionId?.message}
+                    />
+                  )}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1 rounded-lg bg-gray-50 px-3.5 py-2.5">
+                <p className="text-sm font-bold text-gray-900">Total do pedido: {formatCurrency(totalPreview)}</p>
+                {!selectedPaymentCondition ? (
+                  <p className="text-xs font-medium text-gray-400">
+                    Selecione a condição de pagamento pra ver as parcelas.
+                  </p>
+                ) : totalPreview <= 0 ? (
+                  <p className="text-xs font-medium text-gray-400">Adicione itens ao pedido pra calcular as parcelas.</p>
+                ) : (
+                  <div className="mt-1 flex flex-col gap-1">
+                    {installments.map((installment) => (
+                      <div key={installment.number} className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-gray-700">
+                          Parcela {installment.number}/{installments.length}
+                          {installment.dueDate && ` · vence em ${formatDate(installment.dueDate)}`}
+                        </span>
+                        <span className="font-bold text-gray-900">{formatCurrency(installment.value)}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 

@@ -1,8 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { ApiError } from "@/lib/apiClient";
 import type { OrderFormData, OrderStatus } from "@/lib/validations/order";
+import {
+  changeOrderStatus as changeOrderStatusApi,
+  createOrder as createOrderApi,
+  deleteOrder as deleteOrderApi,
+  listOrders,
+  updateOrder as updateOrderApi,
+} from "@/services/orders";
 
 export interface OrderHistoryEntry {
   status: OrderStatus;
@@ -22,108 +30,115 @@ function todayIsoDate(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: "1",
-    customerId: "1",
-    vehicleId: "1",
-    driverId: "1",
-    paymentMethodId: "pix",
-    paymentConditionId: "avista",
-    date: "2026-08-20",
-    status: "entregue",
-    discount: 10,
-    shippingCost: 25,
-    notes: "Entregar na portaria dos fundos.",
-    items: [
-      { productId: "1", quantity: 10, unitPrice: 18.9 },
-      { productId: "3", quantity: 5, unitPrice: 24.9 },
-    ],
-    history: [
-      { status: "aguardando", changedAt: "2026-08-18T09:12:00.000Z" },
-      { status: "em_rota", changedAt: "2026-08-20T08:03:00.000Z" },
-      { status: "entregue", changedAt: "2026-08-20T14:47:00.000Z" },
-    ],
-  },
-  {
-    id: "2",
-    customerId: "2",
-    vehicleId: "3",
-    driverId: "2",
-    paymentMethodId: "boleto",
-    paymentConditionId: "30-60",
-    date: "2026-08-24",
-    status: "em_rota",
-    discount: 0,
-    shippingCost: 0,
-    notes: "",
-    items: [{ productId: "2", quantity: 20, unitPrice: 42.5 }],
-    history: [
-      { status: "aguardando", changedAt: "2026-08-22T11:30:00.000Z" },
-      { status: "em_rota", changedAt: "2026-08-24T07:55:00.000Z" },
-    ],
-  },
-  {
-    id: "3",
-    customerId: "5",
-    vehicleId: "2",
-    driverId: "1",
-    paymentMethodId: "cartao-credito",
-    paymentConditionId: "3x-sem-juros",
-    date: "2026-08-27",
-    status: "aguardando",
-    discount: 0,
-    shippingCost: 15,
-    notes: "",
-    items: [
-      { productId: "4", quantity: 8, unitPrice: 65 },
-      { productId: "5", quantity: 15, unitPrice: 2.5 },
-    ],
-    history: [{ status: "aguardando", changedAt: "2026-08-26T16:20:00.000Z" }],
-  },
-];
+/**
+ * Transições válidas de status — espelha VALID_STATUS_TRANSITIONS do OrderServiceImpl no
+ * backend (que é quem de fato garante a regra). Repetida aqui só pra reportar no toast
+ * quais pedidos vão ser ignorados numa ação em massa, sem precisar de uma ida ao servidor
+ * pra cada um só pra descobrir isso.
+ */
+const VALID_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  aguardando: ["faturado", "cancelado"],
+  faturado: ["em_rota", "cancelado"],
+  em_rota: ["entregue", "faturado"],
+  entregue: [],
+  cancelado: [],
+};
 
 export function useOrders() {
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const createOrder = useCallback((data: OrderFormData): Order => {
-    const newOrder: Order = {
-      ...data,
-      id: crypto.randomUUID(),
-      history: [{ status: data.status, changedAt: new Date().toISOString() }],
-    };
-    setOrders((prev) => [...prev, newOrder]);
-    return newOrder;
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setOrders(await listOrders());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível carregar os pedidos.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const updateOrder = useCallback((id: string, data: OrderFormData) => {
-    setOrders((prev) =>
-      prev.map((order) => {
-        if (order.id !== id) return order;
-        const statusChanged = order.status !== data.status;
-        const history = statusChanged
-          ? [...order.history, { status: data.status, changedAt: new Date().toISOString() }]
-          : order.history;
-        return { ...data, id, history };
-      })
-    );
+  useEffect(() => {
+    // queueMicrotask evita chamar setState de forma síncrona dentro do efeito
+    // (refresh já começa com setIsLoading(true) antes de qualquer await).
+    queueMicrotask(() => {
+      refresh();
+    });
+  }, [refresh]);
+
+  const createOrder = useCallback(async (data: OrderFormData): Promise<Order> => {
+    const created = await createOrderApi(data);
+    setOrders((prev) => [...prev, created]);
+    return created;
   }, []);
 
-  const deleteOrder = useCallback((id: string) => {
+  const updateOrder = useCallback(async (id: string, data: OrderFormData) => {
+    const updated = await updateOrderApi(id, data);
+    setOrders((prev) => prev.map((order) => (order.id === id ? updated : order)));
+    return updated;
+  }, []);
+
+  const deleteOrder = useCallback(async (id: string) => {
+    await deleteOrderApi(id);
     setOrders((prev) => prev.filter((order) => order.id !== id));
   }, []);
 
-  const duplicateOrder = useCallback((order: Order): Order => {
-    const duplicate: Order = {
-      ...order,
-      id: crypto.randomUUID(),
-      date: todayIsoDate(),
-      status: "aguardando",
-      history: [{ status: "aguardando", changedAt: new Date().toISOString() }],
-    };
-    setOrders((prev) => [...prev, duplicate]);
-    return duplicate;
+  const duplicateOrder = useCallback(
+    async (order: Order): Promise<Order> => {
+      const duplicateData: OrderFormData = {
+        customerId: order.customerId,
+        vehicleId: order.vehicleId,
+        driverId: order.driverId,
+        paymentMethodId: order.paymentMethodId,
+        paymentConditionId: order.paymentConditionId,
+        date: todayIsoDate(),
+        status: "aguardando",
+        items: order.items,
+        discount: order.discount,
+        shippingCost: order.shippingCost,
+        notes: order.notes,
+      };
+      return createOrder(duplicateData);
+    },
+    [createOrder]
+  );
+
+  const changeStatus = useCallback(async (id: string, status: OrderStatus) => {
+    const updated = await changeOrderStatusApi(id, status);
+    setOrders((prev) => prev.map((order) => (order.id === id ? updated : order)));
+    return updated;
   }, []);
 
-  return { orders, createOrder, updateOrder, deleteOrder, duplicateOrder };
+  const bulkChangeStatus = useCallback(async (ids: string[], status: OrderStatus) => {
+    const results = await Promise.allSettled(ids.map((id) => changeOrderStatusApi(id, status)));
+    const updatedById = new Map<string, Order>();
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") updatedById.set(ids[index], result.value);
+    });
+    setOrders((prev) => prev.map((order) => updatedById.get(order.id) ?? order));
+  }, []);
+
+  const bulkDelete = useCallback(async (ids: string[]) => {
+    await Promise.allSettled(ids.map((id) => deleteOrderApi(id)));
+    const idSet = new Set(ids);
+    setOrders((prev) => prev.filter((order) => !idSet.has(order.id)));
+  }, []);
+
+  return {
+    orders,
+    isLoading,
+    error,
+    refresh,
+    createOrder,
+    updateOrder,
+    deleteOrder,
+    duplicateOrder,
+    changeStatus,
+    bulkChangeStatus,
+    bulkDelete,
+    validStatusTransitions: VALID_STATUS_TRANSITIONS,
+  };
 }

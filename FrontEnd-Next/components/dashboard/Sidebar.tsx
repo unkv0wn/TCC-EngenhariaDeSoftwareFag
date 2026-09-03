@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
+  Route,
   Ruler,
   Settings,
   Users,
@@ -76,7 +77,10 @@ const NAV_GROUPS: readonly NavGroupData[] = [
   },
   {
     label: "Operação",
-    items: [{ href: "/dashboard/pedidos", label: "Pedidos", icon: ClipboardList }],
+    items: [
+      { href: "/dashboard/pedidos", label: "Pedidos", icon: ClipboardList },
+      { href: "/dashboard/rotas", label: "Gerar rota", icon: Route },
+    ],
   },
 ];
 

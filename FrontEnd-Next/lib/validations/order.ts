@@ -2,12 +2,13 @@ import { z } from "zod";
 
 import { requiredNumber } from "@/lib/validations/zodNumber";
 
-const ORDER_STATUS_VALUES = ["aguardando", "em_rota", "entregue", "cancelado"] as const;
+const ORDER_STATUS_VALUES = ["aguardando", "faturado", "em_rota", "entregue", "cancelado"] as const;
 
 export type OrderStatus = (typeof ORDER_STATUS_VALUES)[number];
 
 export const ORDER_STATUSES: { value: OrderStatus; label: string }[] = [
   { value: "aguardando", label: "Aguardando" },
+  { value: "faturado", label: "Faturado" },
   { value: "em_rota", label: "Em rota" },
   { value: "entregue", label: "Entregue" },
   { value: "cancelado", label: "Cancelado" },

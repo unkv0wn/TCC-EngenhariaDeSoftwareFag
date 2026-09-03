@@ -1,35 +1,63 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { ApiError } from "@/lib/apiClient";
 import type { UnitFormData } from "@/lib/validations/unit";
+import {
+  createUnit as createUnitApi,
+  deleteUnit as deleteUnitApi,
+  listUnits,
+  updateUnit as updateUnitApi,
+} from "@/services/units";
 
-export interface Unit extends UnitFormData {
+export interface Unit {
   id: string;
+  code: string;
+  name: string;
 }
 
-const INITIAL_UNITS: Unit[] = [
-  { id: "un", code: "UN", name: "Unidade" },
-  { id: "kg", code: "KG", name: "Quilo" },
-  { id: "cx", code: "CX", name: "Caixa" },
-  { id: "l", code: "L", name: "Litro" },
-  { id: "pl", code: "PL", name: "Paletes" },
-];
-
 export function useUnits() {
-  const [units, setUnits] = useState<Unit[]>(INITIAL_UNITS);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const createUnit = useCallback((data: UnitFormData) => {
-    setUnits((prev) => [...prev, { ...data, id: crypto.randomUUID() }]);
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setUnits(await listUnits());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível carregar as unidades.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const updateUnit = useCallback((id: string, data: UnitFormData) => {
-    setUnits((prev) => prev.map((unit) => (unit.id === id ? { ...data, id } : unit)));
+  useEffect(() => {
+    // queueMicrotask evita chamar setState de forma síncrona dentro do efeito
+    // (refresh já começa com setIsLoading(true) antes de qualquer await).
+    queueMicrotask(() => {
+      refresh();
+    });
+  }, [refresh]);
+
+  const createUnit = useCallback(async (data: UnitFormData) => {
+    const created = await createUnitApi(data);
+    setUnits((prev) => [...prev, created]);
+    return created;
   }, []);
 
-  const deleteUnit = useCallback((id: string) => {
+  const updateUnit = useCallback(async (id: string, data: UnitFormData) => {
+    const updated = await updateUnitApi(id, data);
+    setUnits((prev) => prev.map((unit) => (unit.id === id ? updated : unit)));
+    return updated;
+  }, []);
+
+  const deleteUnit = useCallback(async (id: string) => {
+    await deleteUnitApi(id);
     setUnits((prev) => prev.filter((unit) => unit.id !== id));
   }, []);
 
-  return { units, createUnit, updateUnit, deleteUnit };
+  return { units, isLoading, error, refresh, createUnit, updateUnit, deleteUnit };
 }
