@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Textarea } from "@/components/ui/Textarea";
 import type { Product } from "@/hooks/useProducts";
 import type { Unit } from "@/hooks/useUnits";
+import { generateNextSku } from "@/lib/generateNextSku";
 import { productSchema, type ProductFormData } from "@/lib/validations/product";
 
 const EMPTY_VALUES: Partial<ProductFormData> = {
@@ -21,18 +22,20 @@ const EMPTY_VALUES: Partial<ProductFormData> = {
 
 interface ProductFormModalProps {
   product: Product | null;
+  products: Product[];
   units: Unit[];
   onClose: () => void;
   onSubmit: (data: ProductFormData) => void;
 }
 
-export function ProductFormModal({ product, units, onClose, onSubmit }: ProductFormModalProps) {
+export function ProductFormModal({ product, products, units, onClose, onSubmit }: ProductFormModalProps) {
   const isEditing = product !== null;
 
   const {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -40,7 +43,10 @@ export function ProductFormModal({ product, units, onClose, onSubmit }: ProductF
   });
 
   useEffect(() => {
-    reset(product ?? EMPTY_VALUES);
+    // No cadastro, sugere o próximo código sequencial (REF-XXX) — o usuário ainda
+    // pode sobrescrever se quiser um código próprio. Na edição, mantém o valor salvo.
+    reset(product ?? { ...EMPTY_VALUES, sku: generateNextSku(products) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product, reset]);
 
   return (
@@ -48,12 +54,20 @@ export function ProductFormModal({ product, units, onClose, onSubmit }: ProductF
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4 px-6 py-5">
         <div className="grid grid-cols-2 gap-3">
           <Input label="Código" placeholder="CX-001" error={errors.sku?.message} {...register("sku")} />
-          <Select
-            label="Unidade"
-            placeholder="Selecione..."
-            options={units.map((unit) => ({ value: unit.id, label: `${unit.name} (${unit.code})` }))}
-            error={errors.unit?.message}
-            {...register("unit")}
+          <Controller
+            name="unit"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="Unidade"
+                placeholder="Selecione..."
+                options={units.map((unit) => ({ value: unit.id, label: `${unit.name} (${unit.code})` }))}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.unit?.message}
+              />
+            )}
           />
         </div>
         <Input

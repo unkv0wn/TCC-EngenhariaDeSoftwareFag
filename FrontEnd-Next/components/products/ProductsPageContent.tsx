@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
@@ -15,10 +16,18 @@ import { ProductTable } from "@/components/products/ProductTable";
 import { useProducts, type Product } from "@/hooks/useProducts";
 import { useUnits } from "@/hooks/useUnits";
 import { useToast } from "@/hooks/useToast";
+import { ApiError } from "@/lib/apiClient";
 import type { ProductFormData } from "@/lib/validations/product";
 
 export function ProductsPageContent() {
-  const { products, createProduct, updateProduct, deleteProduct } = useProducts();
+  const {
+    products,
+    isLoading,
+    error: loadError,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+  } = useProducts();
   const { units } = useUnits();
   const { success, error } = useToast();
   const [view, setView] = useState<ListView>("cards");
@@ -50,7 +59,7 @@ export function ProductsPageContent() {
     setFormProduct(null);
   }
 
-  function handleSubmit(data: ProductFormData) {
+  async function handleSubmit(data: ProductFormData) {
     const isDuplicateSku = products.some(
       (product) => product.sku === data.sku && product.id !== formProduct?.id
     );
@@ -59,14 +68,18 @@ export function ProductsPageContent() {
       return;
     }
 
-    if (formProduct) {
-      updateProduct(formProduct.id, data);
-      success("Produto atualizado", `${data.name} foi atualizado com sucesso.`);
-    } else {
-      createProduct(data);
-      success("Produto cadastrado", `${data.name} foi adicionado ao catálogo.`);
+    try {
+      if (formProduct) {
+        await updateProduct(formProduct.id, data);
+        success("Produto atualizado", `${data.name} foi atualizado com sucesso.`);
+      } else {
+        await createProduct(data);
+        success("Produto cadastrado", `${data.name} foi adicionado ao catálogo.`);
+      }
+      closeForm();
+    } catch (err) {
+      error("Não foi possível salvar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
     }
-    closeForm();
   }
 
   return (
@@ -86,7 +99,11 @@ export function ProductsPageContent() {
           label="Buscar produto"
         />
 
-        {filteredProducts.length === 0 ? (
+        {isLoading ? (
+          <LoadingState message="Carregando produtos..." />
+        ) : loadError ? (
+          <EmptyState message={loadError} />
+        ) : filteredProducts.length === 0 ? (
           <EmptyState
             message={
               search
@@ -112,7 +129,13 @@ export function ProductsPageContent() {
       </main>
 
       {isFormOpen && (
-        <ProductFormModal product={formProduct} units={units} onClose={closeForm} onSubmit={handleSubmit} />
+        <ProductFormModal
+          product={formProduct}
+          products={products}
+          units={units}
+          onClose={closeForm}
+          onSubmit={handleSubmit}
+        />
       )}
 
       {productToDelete && (
@@ -126,10 +149,15 @@ export function ProductsPageContent() {
           }
           confirmLabel="Excluir"
           onCancel={() => setProductToDelete(null)}
-          onConfirm={() => {
-            deleteProduct(productToDelete.id);
-            success("Produto excluído", `${productToDelete.name} foi removido.`);
-            setProductToDelete(null);
+          onConfirm={async () => {
+            try {
+              await deleteProduct(productToDelete.id);
+              success("Produto excluído", `${productToDelete.name} foi removido.`);
+            } catch (err) {
+              error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+            } finally {
+              setProductToDelete(null);
+            }
           }}
         />
       )}
