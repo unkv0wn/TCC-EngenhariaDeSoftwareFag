@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
-import { Select } from "@/components/ui/Select";
 import type { Vehicle } from "@/hooks/useVehicles";
 import { fetchCarBrands, fetchCarModelsByBrand, type FipeOption } from "@/services/fipe";
 import { FUEL_TYPES, vehicleSchema, type VehicleFormData } from "@/lib/validations/vehicle";
@@ -162,12 +161,20 @@ export function VehicleFormModal({ vehicle, onClose, onSubmit }: VehicleFormModa
             {...register("capacityKg", { valueAsNumber: true })}
           />
         </div>
-        <Select
-          label="Tipo de combustível"
-          placeholder="Selecione..."
-          options={FUEL_TYPES}
-          error={errors.fuelType?.message}
-          {...register("fuelType")}
+        <Controller
+          name="fuelType"
+          control={control}
+          render={({ field }) => (
+            <SearchableSelect
+              label="Tipo de combustível"
+              placeholder="Selecione..."
+              options={FUEL_TYPES}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              error={errors.fuelType?.message}
+            />
+          )}
         />
 
         <div className="mt-2 flex justify-end gap-2.5 border-t border-gray-100 pt-4">

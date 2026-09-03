@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertCircle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,15 @@ interface SearchableSelectProps {
   maxResults?: number;
 }
 
+const DROPDOWN_MAX_HEIGHT = 256; // px — precisa bater com max-h-64 abaixo
+
+interface DropdownPosition {
+  top: number;
+  left: number;
+  width: number;
+  openUpward: boolean;
+}
+
 export function SearchableSelect({
   label,
   placeholder = "Selecione...",
@@ -35,8 +45,55 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [position, setPosition] = useState<DropdownPosition | null>(null);
+  const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // O dropdown é montado num portal (document.body), então precisa saber se já está no
+  // client antes de chamar createPortal (evita mismatch de SSR). queueMicrotask evita
+  // chamar setState de forma síncrona dentro do efeito.
+  useEffect(() => {
+    queueMicrotask(() => {
+      setMounted(true);
+    });
+  }, []);
+
+  // Recalcula a posição toda vez que abre e a cada scroll/resize enquanto estiver aberto —
+  // como o dropdown vive num portal fora da árvore do campo, ele nunca é cortado por um
+  // ancestral com overflow (ex: a lista rolável de itens do pedido), mas por estar
+  // `position: fixed` precisa se realinhar manualmente ao invés de herdar o layout.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function updatePosition() {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < DROPDOWN_MAX_HEIGHT && spaceBelow < rect.top;
+      setPosition({
+        top: openUpward ? rect.top : rect.bottom,
+        left: rect.left,
+        width: rect.width,
+        openUpward,
+      });
+    }
+
+    // queueMicrotask evita chamar setState de forma síncrona dentro do efeito.
+    queueMicrotask(updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [isOpen]);
+
+  function openDropdown() {
+    setIsOpen(true);
+    setQuery("");
+  }
 
   const selectedLabel = options.find((option) => option.value === value)?.label ?? "";
 
@@ -53,11 +110,12 @@ export function SearchableSelect({
     if (!isOpen) return;
 
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setQuery("");
-        onBlur?.();
-      }
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      setIsOpen(false);
+      setQuery("");
+      onBlur?.();
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -92,10 +150,7 @@ export function SearchableSelect({
           disabled={disabled}
           value={isOpen ? query : selectedLabel}
           placeholder={placeholder}
-          onFocus={() => {
-            setIsOpen(true);
-            setQuery("");
-          }}
+          onFocus={openDropdown}
           onChange={(event) => setQuery(event.target.value)}
           aria-invalid={!!error}
           className={cn(
@@ -111,37 +166,47 @@ export function SearchableSelect({
           aria-hidden="true"
         />
 
-        {isOpen && !disabled && (
-          <div
-            role="listbox"
-            className="absolute left-0 right-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
-          >
-            {visible.length === 0 ? (
-              <p className="px-3.5 py-2 text-xs font-medium text-gray-400">Nenhum resultado.</p>
-            ) : (
-              visible.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="option"
-                  aria-selected={option.value === value}
-                  onClick={() => handleSelect(option)}
-                  className={cn(
-                    "flex w-full items-center px-3.5 py-2 text-left text-sm",
-                    option.value === value ? "bg-primary-50 text-primary-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))
-            )}
-            {hiddenCount > 0 && (
-              <p className="border-t border-gray-100 px-3.5 py-1.5 text-[11px] font-medium text-gray-400">
-                +{hiddenCount} resultado(s) — digite pra refinar a busca.
-              </p>
-            )}
-          </div>
-        )}
+        {isOpen && !disabled && mounted && position &&
+          createPortal(
+            <div
+              ref={dropdownRef}
+              role="listbox"
+              style={{
+                position: "fixed",
+                top: position.openUpward ? undefined : position.top,
+                bottom: position.openUpward ? window.innerHeight - position.top : undefined,
+                left: position.left,
+                width: position.width,
+              }}
+              className="z-50 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+            >
+              {visible.length === 0 ? (
+                <p className="px-3.5 py-2 text-xs font-medium text-gray-400">Nenhum resultado.</p>
+              ) : (
+                visible.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="option"
+                    aria-selected={option.value === value}
+                    onClick={() => handleSelect(option)}
+                    className={cn(
+                      "flex w-full items-center px-3.5 py-2 text-left text-sm",
+                      option.value === value ? "bg-primary-50 text-primary-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))
+              )}
+              {hiddenCount > 0 && (
+                <p className="border-t border-gray-100 px-3.5 py-1.5 text-[11px] font-medium text-gray-400">
+                  +{hiddenCount} resultado(s) — digite pra refinar a busca.
+                </p>
+              )}
+            </div>,
+            document.body
+          )}
       </div>
       {error && (
         <p role="alert" className="flex items-center gap-1 text-xs font-medium text-red-600">
