@@ -96,6 +96,17 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
   }
 
+  // ── Invalid order status transition ───────────────────────────────────────
+
+  @ExceptionHandler(InvalidOrderStatusTransitionException.class)
+  public ResponseEntity<ProblemDetail> handleInvalidStatusTransition(InvalidOrderStatusTransitionException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+    problem.setTitle("Invalid Status Transition");
+    problem.setDetail(ex.getMessage());
+    log.warn("Invalid order status transition: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+  }
+
   // ── Route computation failure ─────────────────────────────────────────────
 
   @ExceptionHandler(RouteComputationException.class)

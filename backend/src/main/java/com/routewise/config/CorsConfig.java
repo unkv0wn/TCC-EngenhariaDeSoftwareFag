@@ -27,7 +27,7 @@ public class CorsConfig {
       public void addCorsMappings(@NonNull CorsRegistry registry) {
         registry.addMapping("/api/**")
           .allowedOrigins(allowedOrigins != null ? allowedOrigins : new String[0])
-          .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+          .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
           .allowedHeaders("*")
           .exposedHeaders("Content-Type", "X-Request-ID")
           .allowCredentials(false)

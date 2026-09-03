@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
@@ -24,12 +25,15 @@ import { usePaymentMethods } from "@/hooks/usePaymentMethods";
 import { useProducts } from "@/hooks/useProducts";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
+import { ApiError } from "@/lib/apiClient";
 import { formatDate } from "@/lib/format";
 import type { OrderFormData, OrderStatus } from "@/lib/validations/order";
 
 export function OrdersPageContent() {
   const {
     orders,
+    isLoading,
+    error: loadError,
     createOrder,
     updateOrder,
     deleteOrder,
@@ -37,6 +41,7 @@ export function OrdersPageContent() {
     changeStatus,
     bulkChangeStatus,
     bulkDelete,
+    validStatusTransitions,
   } = useOrders();
   const { customers } = useCustomers();
   const { vehicles } = useVehicles();
@@ -44,7 +49,7 @@ export function OrdersPageContent() {
   const { products } = useProducts();
   const { paymentMethods } = usePaymentMethods();
   const { paymentConditions } = usePaymentConditions();
-  const { success } = useToast();
+  const { success, error } = useToast();
 
   const [view, setView] = useState<ListView>("cards");
   const [search, setSearch] = useState("");
@@ -100,26 +105,38 @@ export function OrdersPageContent() {
     setFormOrder(null);
   }
 
-  function handleSubmit(data: OrderFormData) {
-    if (formOrder) {
-      updateOrder(formOrder.id, data);
-      success("Pedido atualizado", "O pedido foi atualizado com sucesso.");
-    } else {
-      createOrder(data);
-      success("Pedido cadastrado", "O pedido foi adicionado.");
+  async function handleSubmit(data: OrderFormData) {
+    try {
+      if (formOrder) {
+        await updateOrder(formOrder.id, data);
+        success("Pedido atualizado", "O pedido foi atualizado com sucesso.");
+      } else {
+        await createOrder(data);
+        success("Pedido cadastrado", "O pedido foi adicionado.");
+      }
+      closeForm();
+    } catch (err) {
+      error("Não foi possível salvar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
     }
-    closeForm();
   }
 
-  function handleDuplicate(order: Order) {
-    const duplicate = duplicateOrder(order);
-    success("Pedido duplicado", "Uma cópia foi criada como novo pedido — revise antes de salvar.");
-    openEditForm(duplicate);
+  async function handleDuplicate(order: Order) {
+    try {
+      const duplicate = await duplicateOrder(order);
+      success("Pedido duplicado", "Uma cópia foi criada como novo pedido — revise antes de salvar.");
+      openEditForm(duplicate);
+    } catch (err) {
+      error("Não foi possível duplicar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+    }
   }
 
-  function handleChangeStatus(order: Order, status: OrderStatus) {
-    changeStatus(order.id, status);
-    success("Status atualizado", `O pedido de ${customers.find((c) => c.id === order.customerId)?.name ?? "cliente"} agora está ${STATUS_TOAST_LABEL[status]}.`);
+  async function handleChangeStatus(order: Order, status: OrderStatus) {
+    try {
+      await changeStatus(order.id, status);
+      success("Status atualizado", `O pedido de ${customers.find((c) => c.id === order.customerId)?.name ?? "cliente"} agora está ${STATUS_TOAST_LABEL[status]}.`);
+    } catch (err) {
+      error("Não foi possível mudar o status", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+    }
   }
 
   function toggleSelect(id: string) {
@@ -142,11 +159,12 @@ export function OrdersPageContent() {
     setSelectedIds(new Set());
   }
 
-  function handleBulkStatus(status: OrderStatus) {
+  async function handleBulkStatus(status: OrderStatus) {
     const selected = orders.filter((order) => selectedIds.has(order.id));
-    // Mirror the state machine from useOrders (VALID_STATUS_TRANSITIONS) so the toast reports
-    // what will actually happen instead of silently no-op'ing on ineligible orders.
-    const eligible = selected.filter((order) => VALID_BULK_ORIGINS[status].includes(order.status));
+    // Espelha a máquina de estados do backend (validStatusTransitions, por status de origem)
+    // pra reportar no toast o que de fato vai acontecer, sem silenciosamente ignorar pedidos
+    // fora de regra.
+    const eligible = selected.filter((order) => validStatusTransitions[order.status].includes(status));
     const skipped = selected.length - eligible.length;
 
     if (eligible.length === 0) {
@@ -161,21 +179,30 @@ export function OrdersPageContent() {
       return;
     }
 
-    bulkChangeStatus(eligible.map((order) => order.id), status);
-    success(
-      "Status atualizado",
-      `${eligible.length} pedido(s) marcado(s) como ${STATUS_TOAST_LABEL[status]}.` +
-        (skipped > 0 ? ` ${skipped} pedido(s) ignorado(s) por não atenderem às regras de transição.` : "")
-    );
-    clearSelection();
+    try {
+      await bulkChangeStatus(eligible.map((order) => order.id), status);
+      success(
+        "Status atualizado",
+        `${eligible.length} pedido(s) marcado(s) como ${STATUS_TOAST_LABEL[status]}.` +
+          (skipped > 0 ? ` ${skipped} pedido(s) ignorado(s) por não atenderem às regras de transição.` : "")
+      );
+      clearSelection();
+    } catch (err) {
+      error("Não foi possível atualizar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+    }
   }
 
-  function handleBulkDelete() {
+  async function handleBulkDelete() {
     const ids = Array.from(selectedIds);
-    bulkDelete(ids);
-    success("Pedidos excluídos", `${ids.length} pedido(s) removido(s).`);
-    clearSelection();
-    setIsBulkDeleteOpen(false);
+    try {
+      await bulkDelete(ids);
+      success("Pedidos excluídos", `${ids.length} pedido(s) removido(s).`);
+      clearSelection();
+    } catch (err) {
+      error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+    } finally {
+      setIsBulkDeleteOpen(false);
+    }
   }
 
   return (
@@ -213,7 +240,11 @@ export function OrdersPageContent() {
             />
           )}
 
-          {filteredOrders.length === 0 ? (
+          {isLoading ? (
+            <LoadingState message="Carregando pedidos..." />
+          ) : loadError ? (
+            <EmptyState message={loadError} />
+          ) : filteredOrders.length === 0 ? (
             <EmptyState
               message={hasActiveFilters ? "Nenhum pedido encontrado para os filtros aplicados." : "Nenhum pedido cadastrado."}
             />
@@ -279,10 +310,15 @@ export function OrdersPageContent() {
             }
             confirmLabel="Excluir"
             onCancel={() => setOrderToDelete(null)}
-            onConfirm={() => {
-              deleteOrder(orderToDelete.id);
-              success("Pedido excluído", "O registro foi removido.");
-              setOrderToDelete(null);
+            onConfirm={async () => {
+              try {
+                await deleteOrder(orderToDelete.id);
+                success("Pedido excluído", "O registro foi removido.");
+              } catch (err) {
+                error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+              } finally {
+                setOrderToDelete(null);
+              }
             }}
           />
         )}
@@ -326,14 +362,4 @@ const STATUS_TOAST_LABEL: Record<OrderStatus, string> = {
   em_rota: "em rota",
   entregue: "entregue",
   cancelado: "cancelado",
-};
-
-/** Quais status de origem uma ação em massa aceita para cada status de destino (espelha useOrders). */
-const VALID_BULK_ORIGINS: Record<OrderStatus, OrderStatus[]> = {
-  aguardando: [],
-  faturado: ["aguardando"],
-  em_rota: ["faturado"],
-  entregue: [],
-  // Pedido em rota já saiu para entrega — não é mais cancelável por aqui.
-  cancelado: ["aguardando", "faturado"],
 };
