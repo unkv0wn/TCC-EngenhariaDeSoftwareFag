@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
@@ -15,10 +16,18 @@ import { CustomerTable } from "@/components/customers/CustomerTable";
 import { CustomerTypeFilter, type CustomerTypeFilterValue } from "@/components/customers/CustomerTypeFilter";
 import { useCustomers, type Customer } from "@/hooks/useCustomers";
 import { useToast } from "@/hooks/useToast";
+import { ApiError } from "@/lib/apiClient";
 import type { CustomerFormData } from "@/lib/validations/customer";
 
 export function CustomersPageContent() {
-  const { customers, createCustomer, updateCustomer, deleteCustomer } = useCustomers();
+  const {
+    customers,
+    isLoading,
+    error: loadError,
+    createCustomer,
+    updateCustomer,
+    deleteCustomer,
+  } = useCustomers();
   const { success, error } = useToast();
   const [view, setView] = useState<ListView>("cards");
   const [typeFilter, setTypeFilter] = useState<CustomerTypeFilterValue>("todos");
@@ -57,7 +66,7 @@ export function CustomersPageContent() {
     setFormCustomer(null);
   }
 
-  function handleSubmit(data: CustomerFormData) {
+  async function handleSubmit(data: CustomerFormData) {
     const isDuplicateDocument = customers.some(
       (customer) => customer.document === data.document && customer.id !== formCustomer?.id
     );
@@ -66,14 +75,18 @@ export function CustomersPageContent() {
       return;
     }
 
-    if (formCustomer) {
-      updateCustomer(formCustomer.id, data);
-      success("Cliente atualizado", `${data.name} foi atualizado com sucesso.`);
-    } else {
-      createCustomer(data);
-      success("Cliente cadastrado", `${data.name} foi adicionado.`);
+    try {
+      if (formCustomer) {
+        await updateCustomer(formCustomer.id, data);
+        success("Cliente atualizado", `${data.name} foi atualizado com sucesso.`);
+      } else {
+        await createCustomer(data);
+        success("Cliente cadastrado", `${data.name} foi adicionado.`);
+      }
+      closeForm();
+    } catch (err) {
+      error("Não foi possível salvar", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
     }
-    closeForm();
   }
 
   return (
@@ -94,7 +107,11 @@ export function CustomersPageContent() {
           label="Buscar cliente"
         />
 
-        {filteredCustomers.length === 0 ? (
+        {isLoading ? (
+          <LoadingState message="Carregando clientes..." />
+        ) : loadError ? (
+          <EmptyState message={loadError} />
+        ) : filteredCustomers.length === 0 ? (
           <EmptyState
             message={
               search
@@ -124,10 +141,15 @@ export function CustomersPageContent() {
           }
           confirmLabel="Excluir"
           onCancel={() => setCustomerToDelete(null)}
-          onConfirm={() => {
-            deleteCustomer(customerToDelete.id);
-            success("Cliente excluído", `${customerToDelete.name} foi removido.`);
-            setCustomerToDelete(null);
+          onConfirm={async () => {
+            try {
+              await deleteCustomer(customerToDelete.id);
+              success("Cliente excluído", `${customerToDelete.name} foi removido.`);
+            } catch (err) {
+              error("Não foi possível excluir", err instanceof ApiError ? err.message : "Tente novamente em instantes.");
+            } finally {
+              setCustomerToDelete(null);
+            }
           }}
         />
       )}

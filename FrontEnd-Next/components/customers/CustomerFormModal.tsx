@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { Customer } from "@/hooks/useCustomers";
 import { useToast } from "@/hooks/useToast";
 import { maskDocument, maskPhone, maskZipCode } from "@/lib/masks";
@@ -60,6 +60,7 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
     resetField,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
@@ -157,24 +158,40 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
         <Divider label="Dados cadastrais" />
 
         <div className="grid grid-cols-2 gap-3">
-          <Select
-            label="Tipo de pessoa"
-            options={PERSON_TYPES}
-            error={errors.personType?.message}
-            {...register("personType", {
-              onChange: () => {
-                clearTimeout(cnpjTimerRef.current);
-                resetField("document");
-                resetField("tradeName");
-              },
-            })}
+          <Controller
+            name="personType"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="Tipo de pessoa"
+                placeholder="Selecione..."
+                options={PERSON_TYPES}
+                value={field.value}
+                onChange={(newValue) => {
+                  field.onChange(newValue);
+                  clearTimeout(cnpjTimerRef.current);
+                  resetField("document");
+                  resetField("tradeName");
+                }}
+                onBlur={field.onBlur}
+                error={errors.personType?.message}
+              />
+            )}
           />
-          <Select
-            label="Tipo"
-            placeholder="Selecione..."
-            options={CUSTOMER_TYPES}
-            error={errors.type?.message}
-            {...register("type")}
+          <Controller
+            name="type"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="Tipo"
+                placeholder="Selecione..."
+                options={CUSTOMER_TYPES}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.type?.message}
+              />
+            )}
           />
         </div>
 
@@ -281,12 +298,20 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
             error={errors.address?.city?.message}
             {...register("address.city")}
           />
-          <Select
-            label="UF"
-            placeholder="Selecione..."
-            options={BRAZIL_STATES}
-            error={errors.address?.state?.message}
-            {...register("address.state")}
+          <Controller
+            name="address.state"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="UF"
+                placeholder="Selecione..."
+                options={BRAZIL_STATES}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.address?.state?.message}
+              />
+            )}
           />
         </div>
 
