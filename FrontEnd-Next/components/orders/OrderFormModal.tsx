@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { Controller, useFieldArray, useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Textarea } from "@/components/ui/Textarea";
+import { CustomerSearchModal } from "@/components/orders/CustomerSearchModal";
+import { ProductSearchModal } from "@/components/orders/ProductSearchModal";
 import type { Customer } from "@/hooks/useCustomers";
 import type { Driver } from "@/hooks/useDrivers";
 import type { Order } from "@/hooks/useOrders";
@@ -71,6 +73,8 @@ export function OrderFormModal({
 }: OrderFormModalProps) {
   const isEditing = order !== null;
   const [activeTab, setActiveTab] = useState<Tab>("cliente");
+  const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
+  const [productSearchIndex, setProductSearchIndex] = useState<number | null>(null);
 
   const {
     register,
@@ -152,17 +156,39 @@ export function OrderFormModal({
                 name="customerId"
                 control={control}
                 render={({ field }) => (
-                  <SearchableSelect
-                    label="Cliente"
-                    placeholder="Selecione..."
-                    options={customers.map((customer) => ({ value: customer.id, label: customer.name }))}
-                    value={field.value}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    error={errors.customerId?.message}
-                  />
+                  <div className="flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <SearchableSelect
+                        label="Cliente"
+                        placeholder="Selecione..."
+                        options={customers.map((customer) => ({ value: customer.id, label: customer.name }))}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={errors.customerId?.message}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomerSearchOpen(true)}
+                      aria-label="Buscar cliente"
+                      title="Buscar cliente"
+                      className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700"
+                    >
+                      <Search className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
                 )}
               />
+
+              {isCustomerSearchOpen && (
+                <CustomerSearchModal
+                  customers={customers}
+                  selectedId={watch("customerId")}
+                  onSelect={(customerId) => setValue("customerId", customerId, { shouldValidate: true })}
+                  onClose={() => setIsCustomerSearchOpen(false)}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <Controller
@@ -242,25 +268,36 @@ export function OrderFormModal({
                 <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
                   {fields.map((field, index) => (
                     <div key={field.id} className="flex items-start gap-2">
-                      <div className="min-w-0 flex-[2]">
-                        <Controller
-                          name={`items.${index}.productId` as const}
-                          control={control}
-                          render={({ field }) => (
-                            <SearchableSelect
-                              label=""
-                              placeholder="Selecione..."
-                              options={products.map((product) => ({ value: product.id, label: product.name }))}
-                              value={field.value}
-                              onChange={(newValue) => {
-                                field.onChange(newValue);
-                                handleProductChange(index, newValue);
-                              }}
-                              onBlur={field.onBlur}
-                              error={errors.items?.[index]?.productId?.message}
-                            />
-                          )}
-                        />
+                      <div className="flex min-w-0 flex-[2] items-start gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <Controller
+                            name={`items.${index}.productId` as const}
+                            control={control}
+                            render={({ field }) => (
+                              <SearchableSelect
+                                label=""
+                                placeholder="Selecione..."
+                                options={products.map((product) => ({ value: product.id, label: product.name }))}
+                                value={field.value}
+                                onChange={(newValue) => {
+                                  field.onChange(newValue);
+                                  handleProductChange(index, newValue);
+                                }}
+                                onBlur={field.onBlur}
+                                error={errors.items?.[index]?.productId?.message}
+                              />
+                            )}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setProductSearchIndex(index)}
+                          aria-label="Buscar produto"
+                          title="Buscar produto"
+                          className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700"
+                        >
+                          <Search className="h-4 w-4" aria-hidden="true" />
+                        </button>
                       </div>
                       <div className="w-20">
                         <Input
@@ -294,6 +331,18 @@ export function OrderFormModal({
                   ))}
                 </div>
               </div>
+
+              {productSearchIndex !== null && (
+                <ProductSearchModal
+                  products={products}
+                  selectedId={watch(`items.${productSearchIndex}.productId`)}
+                  onSelect={(productId) => {
+                    setValue(`items.${productSearchIndex}.productId`, productId, { shouldValidate: true });
+                    handleProductChange(productSearchIndex, productId);
+                  }}
+                  onClose={() => setProductSearchIndex(null)}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <Input
