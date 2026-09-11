@@ -107,6 +107,17 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
   }
 
+  // ── Invalid route status transition ──────────────────────────────────────
+
+  @ExceptionHandler(InvalidRouteStatusTransitionException.class)
+  public ResponseEntity<ProblemDetail> handleInvalidRouteStatusTransition(InvalidRouteStatusTransitionException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+    problem.setTitle("Invalid Status Transition");
+    problem.setDetail(ex.getMessage());
+    log.warn("Invalid route status transition: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+  }
+
   // ── Route computation failure ─────────────────────────────────────────────
 
   @ExceptionHandler(RouteComputationException.class)
