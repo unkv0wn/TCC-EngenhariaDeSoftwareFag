@@ -37,6 +37,9 @@ const addressSchema = z.object({
   state: z.enum(BRAZIL_STATES.map((uf) => uf.value) as [string, ...string[]], {
     message: "Selecione a UF.",
   }),
+  // Coordenada opcional (geocoding). Preenchida pelo modal "Verificar localização no mapa".
+  latitude: z.number().min(-90).max(90).nullish(),
+  longitude: z.number().min(-180).max(180).nullish(),
 });
 
 export const customerSchema = z
