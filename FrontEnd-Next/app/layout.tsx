@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono, Nunito } from "next/font/google";
 import "./globals.css";
 
+import { PreventPageZoomGesture } from "@/components/ui/PreventPageZoomGesture";
 import { ToastProvider } from "@/components/ui/toast/ToastProvider";
 
 const nunito = Nunito({
@@ -30,6 +31,7 @@ export default function RootLayout({
       className={`${nunito.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <PreventPageZoomGesture />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

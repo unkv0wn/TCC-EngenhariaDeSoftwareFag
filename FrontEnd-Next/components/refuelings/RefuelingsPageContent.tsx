@@ -8,7 +8,9 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { usePagination } from "@/hooks/usePagination";
 import { RefuelingFormModal } from "@/components/refuelings/RefuelingFormModal";
 import { RefuelingTable } from "@/components/refuelings/RefuelingTable";
 import { ALL_VEHICLES_VALUE, VehicleFilterSelect } from "@/components/refuelings/VehicleFilterSelect";
@@ -51,6 +53,8 @@ export function RefuelingsPageContent() {
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [refuelings, search, vehicleFilter, drivers]);
+
+  const pagination = usePagination(filteredRefuelings);
 
   function openCreateForm() {
     setFormRefueling(null);
@@ -125,13 +129,24 @@ export function RefuelingsPageContent() {
             }
           />
         ) : (
-          <RefuelingTable
-            refuelings={filteredRefuelings}
-            vehicles={vehicles}
-            drivers={drivers}
-            onEdit={openEditForm}
-            onDelete={setRefuelingToDelete}
-          />
+          <>
+            <RefuelingTable
+              refuelings={pagination.pageItems}
+              vehicles={vehicles}
+              drivers={drivers}
+              onEdit={openEditForm}
+              onDelete={setRefuelingToDelete}
+            />
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              itemLabel="abastecimentos"
+              onPageChange={pagination.setPage}
+            />
+          </>
         )}
       </main>
 

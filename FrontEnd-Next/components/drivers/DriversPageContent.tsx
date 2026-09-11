@@ -8,8 +8,10 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
+import { usePagination } from "@/hooks/usePagination";
 import { DriverFormModal } from "@/components/drivers/DriverFormModal";
 import { DriverGrid } from "@/components/drivers/DriverGrid";
 import { DriverTable } from "@/components/drivers/DriverTable";
@@ -43,6 +45,8 @@ export function DriversPageContent() {
       [driver.fullName, driver.cpf, driver.cnhNumber].some((field) => field.toLowerCase().includes(query))
     );
   }, [drivers, search]);
+
+  const pagination = usePagination(filteredDrivers);
 
   function openCreateForm() {
     setFormDriver(null);
@@ -122,10 +126,23 @@ export function DriversPageContent() {
               search ? `Nenhum motorista encontrado para "${search}".` : "Nenhum motorista cadastrado."
             }
           />
-        ) : view === "cards" ? (
-          <DriverGrid drivers={filteredDrivers} onEdit={openEditForm} onDelete={handleDeleteClick} />
         ) : (
-          <DriverTable drivers={filteredDrivers} onEdit={openEditForm} onDelete={handleDeleteClick} />
+          <>
+            {view === "cards" ? (
+              <DriverGrid drivers={pagination.pageItems} onEdit={openEditForm} onDelete={handleDeleteClick} />
+            ) : (
+              <DriverTable drivers={pagination.pageItems} onEdit={openEditForm} onDelete={handleDeleteClick} />
+            )}
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              itemLabel="motoristas"
+              onPageChange={pagination.setPage}
+            />
+          </>
         )}
       </main>
 

@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
-import { GerarRotaScreen } from "@/components/rotas/GerarRotaScreen";
+import { RoutesDashboardScreen } from "@/components/rotas/RoutesDashboardScreen";
 
 export const metadata: Metadata = {
-  title: "Gerar rota",
-  description: "Selecione os pedidos faturados e gere a rota otimizada.",
+  title: "Rotas",
+  description: "Acompanhe as rotas geradas hoje.",
 };
 
 export default function RotasPage() {
-  return <GerarRotaScreen />;
+  return <RoutesDashboardScreen />;
 }

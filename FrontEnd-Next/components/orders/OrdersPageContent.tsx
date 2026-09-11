@@ -8,8 +8,10 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
+import { usePagination } from "@/hooks/usePagination";
 import { OrderBulkActionsBar } from "@/components/orders/OrderBulkActionsBar";
 import { OrderDateRangeFilter } from "@/components/orders/OrderDateRangeFilter";
 import { OrderFormModal } from "@/components/orders/OrderFormModal";
@@ -90,6 +92,9 @@ export function OrdersPageContent() {
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [orders, search, statusFilter, dateFrom, dateTo, customers]);
 
+  const pagination = usePagination(filteredOrders);
+  const pagedOrders = pagination.pageItems;
+
   function openCreateForm() {
     setFormOrder(null);
     setIsFormOpen(true);
@@ -150,8 +155,11 @@ export function OrdersPageContent() {
 
   function toggleSelectAll() {
     setSelectedIds((prev) => {
-      const allSelected = filteredOrders.length > 0 && filteredOrders.every((order) => prev.has(order.id));
-      return allSelected ? new Set() : new Set(filteredOrders.map((order) => order.id));
+      const allSelected = pagedOrders.length > 0 && pagedOrders.every((order) => prev.has(order.id));
+      const next = new Set(prev);
+      if (allSelected) pagedOrders.forEach((order) => next.delete(order.id));
+      else pagedOrders.forEach((order) => next.add(order.id));
+      return next;
     });
   }
 
@@ -248,37 +256,50 @@ export function OrdersPageContent() {
             <EmptyState
               message={hasActiveFilters ? "Nenhum pedido encontrado para os filtros aplicados." : "Nenhum pedido cadastrado."}
             />
-          ) : view === "cards" ? (
-            <OrderGrid
-              orders={filteredOrders}
-              customers={customers}
-              vehicles={vehicles}
-              drivers={drivers}
-              paymentMethods={paymentMethods}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-              onEdit={openEditForm}
-              onDelete={setOrderToDelete}
-              onDuplicate={handleDuplicate}
-              onPrint={setOrderToPrint}
-              onChangeStatus={handleChangeStatus}
-            />
           ) : (
-            <OrderTable
-              orders={filteredOrders}
-              customers={customers}
-              vehicles={vehicles}
-              drivers={drivers}
-              paymentMethods={paymentMethods}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-              onToggleSelectAll={toggleSelectAll}
-              onEdit={openEditForm}
-              onDelete={setOrderToDelete}
-              onDuplicate={handleDuplicate}
-              onPrint={setOrderToPrint}
-              onChangeStatus={handleChangeStatus}
-            />
+            <>
+              {view === "cards" ? (
+                <OrderGrid
+                  orders={pagedOrders}
+                  customers={customers}
+                  vehicles={vehicles}
+                  drivers={drivers}
+                  paymentMethods={paymentMethods}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelect}
+                  onEdit={openEditForm}
+                  onDelete={setOrderToDelete}
+                  onDuplicate={handleDuplicate}
+                  onPrint={setOrderToPrint}
+                  onChangeStatus={handleChangeStatus}
+                />
+              ) : (
+                <OrderTable
+                  orders={pagedOrders}
+                  customers={customers}
+                  vehicles={vehicles}
+                  drivers={drivers}
+                  paymentMethods={paymentMethods}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelect}
+                  onToggleSelectAll={toggleSelectAll}
+                  onEdit={openEditForm}
+                  onDelete={setOrderToDelete}
+                  onDuplicate={handleDuplicate}
+                  onPrint={setOrderToPrint}
+                  onChangeStatus={handleChangeStatus}
+                />
+              )}
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                from={pagination.from}
+                to={pagination.to}
+                total={pagination.total}
+                itemLabel="pedidos"
+                onPageChange={pagination.setPage}
+              />
+            </>
           )}
         </main>
 

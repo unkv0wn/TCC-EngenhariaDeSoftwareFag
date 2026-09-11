@@ -8,7 +8,9 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { usePagination } from "@/hooks/usePagination";
 import { PaymentMethodFormModal } from "@/components/payment-methods/PaymentMethodFormModal";
 import { PaymentMethodTable } from "@/components/payment-methods/PaymentMethodTable";
 import { useOrders } from "@/hooks/useOrders";
@@ -38,6 +40,8 @@ export function PaymentMethodsPageContent() {
     if (!query) return paymentMethods;
     return paymentMethods.filter((method) => method.name.toLowerCase().includes(query));
   }, [paymentMethods, search]);
+
+  const pagination = usePagination(filteredPaymentMethods);
 
   function openCreateForm() {
     setFormPaymentMethod(null);
@@ -118,7 +122,18 @@ export function PaymentMethodsPageContent() {
             }
           />
         ) : (
-          <PaymentMethodTable paymentMethods={filteredPaymentMethods} onEdit={openEditForm} onDelete={handleDeleteClick} />
+          <>
+            <PaymentMethodTable paymentMethods={pagination.pageItems} onEdit={openEditForm} onDelete={handleDeleteClick} />
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              itemLabel="formas de pagamento"
+              onPageChange={pagination.setPage}
+            />
+          </>
         )}
       </main>
 

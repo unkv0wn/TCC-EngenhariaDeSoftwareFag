@@ -72,6 +72,8 @@ public class CustomerServiceImpl implements ICustomerService {
     entity.setAddressDistrict(address.district());
     entity.setAddressCity(address.city());
     entity.setAddressState(address.state());
+    entity.setAddressLatitude(address.latitude());
+    entity.setAddressLongitude(address.longitude());
   }
 
   private CustomerDto toDto(Customer entity) {
@@ -82,7 +84,9 @@ public class CustomerServiceImpl implements ICustomerService {
       entity.getAddressComplement(),
       entity.getAddressDistrict(),
       entity.getAddressCity(),
-      entity.getAddressState()
+      entity.getAddressState(),
+      entity.getAddressLatitude(),
+      entity.getAddressLongitude()
     );
     return new CustomerDto(
       entity.getId(),

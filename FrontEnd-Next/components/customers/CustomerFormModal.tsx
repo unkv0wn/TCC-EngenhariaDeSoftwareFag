@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { MapPin } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { GeocodeConfirmModal } from "@/components/customers/GeocodeConfirmModal";
 import type { Customer } from "@/hooks/useCustomers";
 import { useToast } from "@/hooks/useToast";
 import { maskDocument, maskPhone, maskZipCode } from "@/lib/masks";
@@ -21,6 +23,7 @@ import {
   type PersonType,
 } from "@/lib/validations/customer";
 import { fetchCompanyByCnpj } from "@/services/brasilApi";
+import { geocodeCustomerAddress } from "@/services/geocoding";
 import { fetchAddressByZipCode } from "@/services/viaCep";
 
 const LOOKUP_DEBOUNCE_MS = 600;
@@ -40,6 +43,8 @@ const EMPTY_VALUES: Partial<CustomerFormData> = {
     district: "",
     city: "",
     state: "",
+    latitude: null,
+    longitude: null,
   },
 };
 
@@ -51,7 +56,8 @@ interface CustomerFormModalProps {
 
 export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormModalProps) {
   const isEditing = customer !== null;
-  const { error } = useToast();
+  const { success, error } = useToast();
+  const [isGeocodeModalOpen, setIsGeocodeModalOpen] = useState(false);
 
   const {
     register,
@@ -73,6 +79,8 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
 
   const personType = watch("personType");
   const isJuridica = personType === "juridica";
+  const name = watch("name");
+  const address = watch("address");
 
   const [isLookingUpCep, setIsLookingUpCep] = useState(false);
   const [isLookingUpCnpj, setIsLookingUpCnpj] = useState(false);
@@ -109,6 +117,20 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
         setValue("address.district", address.district, { shouldValidate: true });
         setValue("address.city", address.city, { shouldValidate: true });
         setValue("address.state", address.state, { shouldValidate: true });
+
+        // Geocoding automático (rua → CEP) — silencioso; se nada resolver, fica pro
+        // usuário posicionar o pino no "Verificar localização no mapa".
+        const coord = await geocodeCustomerAddress({
+          street: address.street,
+          district: address.district,
+          city: address.city,
+          state: address.state,
+          zipCode: maskedZipCode,
+        });
+        if (cepRequestIdRef.current === requestId && coord) {
+          setValue("address.latitude", coord.lat, { shouldValidate: false });
+          setValue("address.longitude", coord.lng, { shouldValidate: false });
+        }
       } catch {
         if (cepRequestIdRef.current === requestId) {
           error("Não foi possível consultar o CEP", "Tente novamente ou preencha o endereço manualmente.");
@@ -315,6 +337,23 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
           />
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsGeocodeModalOpen(true)}
+            disabled={!address.city || !address.state}
+            className="flex items-center gap-1.5 self-start rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12.5px] font-bold text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+            {address.latitude != null && address.longitude != null ? "Ajustar localização no mapa" : "Verificar localização no mapa"}
+          </button>
+          {address.latitude != null && address.longitude != null && (
+            <span className="text-[11.5px] font-semibold text-success-600">
+              Localização definida ({address.latitude.toFixed(4)}, {address.longitude.toFixed(4)})
+            </span>
+          )}
+        </div>
+
         <div className="mt-2 flex justify-end gap-2.5 border-t border-gray-100 pt-4">
           <Button type="button" variant="secondary" className="w-auto" onClick={onClose}>
             Cancelar
@@ -324,6 +363,28 @@ export function CustomerFormModal({ customer, onClose, onSubmit }: CustomerFormM
           </Button>
         </div>
       </form>
+
+      {isGeocodeModalOpen && (
+        <GeocodeConfirmModal
+          title={name}
+          address={address}
+          initialCoord={
+            address.latitude != null && address.longitude != null
+              ? { lat: address.latitude, lng: address.longitude }
+              : null
+          }
+          onConfirm={(coord) => {
+            setValue("address.latitude", coord.lat, { shouldValidate: true });
+            setValue("address.longitude", coord.lng, { shouldValidate: true });
+            success(
+              "Localização confirmada",
+              `${coord.lat.toFixed(5)}, ${coord.lng.toFixed(5)} — salva ao confirmar o cadastro.`
+            );
+            setIsGeocodeModalOpen(false);
+          }}
+          onClose={() => setIsGeocodeModalOpen(false)}
+        />
+      )}
     </Modal>
   );
 }
