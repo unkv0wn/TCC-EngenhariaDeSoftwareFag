@@ -23,7 +23,7 @@ import java.util.*;
  * <h2>State Space</h2>
  * <pre>
  *   State = (currentWaypointIndex, visitedBitmask)
- *   States = N × 2^N   →   max 10 × 1024 = 10,240 states (for N=10)
+ *   States = N × 2^N   →   max 15 × 2^15 = 491,520 states (for N=15, the DTO ceiling)
  * </pre>
  *
  * <h2>Heuristic (admissible)</h2>
