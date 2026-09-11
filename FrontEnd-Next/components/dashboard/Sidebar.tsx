@@ -79,7 +79,7 @@ const NAV_GROUPS: readonly NavGroupData[] = [
     label: "Operação",
     items: [
       { href: "/dashboard/pedidos", label: "Pedidos", icon: ClipboardList },
-      { href: "/dashboard/rotas", label: "Gerar rota", icon: Route },
+      { href: "/dashboard/rotas", label: "Rotas", icon: Route },
     ],
   },
 ];
@@ -130,6 +130,11 @@ function NavItem({
   );
 }
 
+function isNavItemActive(href: string, pathname: string): boolean {
+  if (href === "/dashboard") return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 function NavGroup({ label, items, subgroups, pathname }: NavGroupData & { pathname: string }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -155,7 +160,7 @@ function NavGroup({ label, items, subgroups, pathname }: NavGroupData & { pathna
       {expanded && (
         <>
           {items.map((item) => (
-            <NavItem key={item.label} {...item} active={item.href === pathname} />
+            <NavItem key={item.label} {...item} active={isNavItemActive(item.href, pathname)} />
           ))}
           {subgroups?.map((subgroup) => (
             <div key={subgroup.label} className="mt-1 flex flex-col gap-0.5 border-l border-gray-100 pl-2.5">
@@ -163,7 +168,7 @@ function NavGroup({ label, items, subgroups, pathname }: NavGroupData & { pathna
                 {subgroup.label}
               </span>
               {subgroup.items.map((item) => (
-                <NavItem key={item.label} {...item} active={item.href === pathname} />
+                <NavItem key={item.label} {...item} active={isNavItemActive(item.href, pathname)} />
               ))}
             </div>
           ))}
@@ -197,7 +202,12 @@ export function Sidebar() {
 
       <div className="mt-auto pt-3">
         <div className="mb-2 border-t border-gray-100" />
-        <NavItem icon={Settings} label="Configurações" />
+        <NavItem
+          icon={Settings}
+          label="Configurações"
+          href="/dashboard/configuracoes"
+          active={isNavItemActive("/dashboard/configuracoes", pathname)}
+        />
         <NavItem icon={LogOut} label="Sair" variant="danger" onClick={handleLogout} />
       </div>
     </aside>
