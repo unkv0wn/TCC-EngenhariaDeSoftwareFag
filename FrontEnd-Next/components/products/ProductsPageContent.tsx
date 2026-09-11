@@ -8,8 +8,10 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
+import { usePagination } from "@/hooks/usePagination";
 import { ProductFormModal } from "@/components/products/ProductFormModal";
 import { ProductGrid } from "@/components/products/ProductGrid";
 import { ProductTable } from "@/components/products/ProductTable";
@@ -43,6 +45,8 @@ export function ProductsPageContent() {
       [product.sku, product.name].some((field) => field.toLowerCase().includes(query))
     );
   }, [products, search]);
+
+  const pagination = usePagination(filteredProducts);
 
   function openCreateForm() {
     setFormProduct(null);
@@ -111,20 +115,33 @@ export function ProductsPageContent() {
                 : "Nenhum produto cadastrado."
             }
           />
-        ) : view === "cards" ? (
-          <ProductGrid
-            products={filteredProducts}
-            units={units}
-            onEdit={openEditForm}
-            onDelete={setProductToDelete}
-          />
         ) : (
-          <ProductTable
-            products={filteredProducts}
-            units={units}
-            onEdit={openEditForm}
-            onDelete={setProductToDelete}
-          />
+          <>
+            {view === "cards" ? (
+              <ProductGrid
+                products={pagination.pageItems}
+                units={units}
+                onEdit={openEditForm}
+                onDelete={setProductToDelete}
+              />
+            ) : (
+              <ProductTable
+                products={pagination.pageItems}
+                units={units}
+                onEdit={openEditForm}
+                onDelete={setProductToDelete}
+              />
+            )}
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              itemLabel="produtos"
+              onPageChange={pagination.setPage}
+            />
+          </>
         )}
       </main>
 

@@ -8,7 +8,9 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { usePagination } from "@/hooks/usePagination";
 import { UnitFormModal } from "@/components/units/UnitFormModal";
 import { UnitTable } from "@/components/units/UnitTable";
 import { useProducts } from "@/hooks/useProducts";
@@ -31,6 +33,8 @@ export function UnitsPageContent() {
     if (!query) return units;
     return units.filter((unit) => [unit.code, unit.name].some((field) => field.toLowerCase().includes(query)));
   }, [units, search]);
+
+  const pagination = usePagination(filteredUnits);
 
   function openCreateForm() {
     setFormUnit(null);
@@ -112,7 +116,18 @@ export function UnitsPageContent() {
             }
           />
         ) : (
-          <UnitTable units={filteredUnits} onEdit={openEditForm} onDelete={handleDeleteClick} />
+          <>
+            <UnitTable units={pagination.pageItems} onEdit={openEditForm} onDelete={handleDeleteClick} />
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              itemLabel="unidades"
+              onPageChange={pagination.setPage}
+            />
+          </>
         )}
       </main>
 

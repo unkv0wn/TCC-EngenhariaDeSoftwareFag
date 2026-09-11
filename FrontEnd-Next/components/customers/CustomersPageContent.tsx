@@ -8,8 +8,10 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
+import { usePagination } from "@/hooks/usePagination";
 import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 import { CustomerGrid } from "@/components/customers/CustomerGrid";
 import { CustomerTable } from "@/components/customers/CustomerTable";
@@ -50,6 +52,8 @@ export function CustomersPageContent() {
       );
     });
   }, [customers, typeFilter, search]);
+
+  const pagination = usePagination(filteredCustomers);
 
   function openCreateForm() {
     setFormCustomer(null);
@@ -119,10 +123,23 @@ export function CustomersPageContent() {
                 : "Nenhum cliente cadastrado."
             }
           />
-        ) : view === "cards" ? (
-          <CustomerGrid customers={filteredCustomers} onEdit={openEditForm} onDelete={setCustomerToDelete} />
         ) : (
-          <CustomerTable customers={filteredCustomers} onEdit={openEditForm} onDelete={setCustomerToDelete} />
+          <>
+            {view === "cards" ? (
+              <CustomerGrid customers={pagination.pageItems} onEdit={openEditForm} onDelete={setCustomerToDelete} />
+            ) : (
+              <CustomerTable customers={pagination.pageItems} onEdit={openEditForm} onDelete={setCustomerToDelete} />
+            )}
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              itemLabel="clientes"
+              onPageChange={pagination.setPage}
+            />
+          </>
         )}
       </main>
 

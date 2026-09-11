@@ -7,8 +7,10 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { ViewToggle, type ListView } from "@/components/ui/ViewToggle";
+import { usePagination } from "@/hooks/usePagination";
 import { DeleteVehicleDialog } from "@/components/vehicles/DeleteVehicleDialog";
 import { VehicleFormModal } from "@/components/vehicles/VehicleFormModal";
 import { VehicleGrid } from "@/components/vehicles/VehicleGrid";
@@ -45,6 +47,8 @@ export function VehiclesPageContent() {
       )
     );
   }, [vehicles, search]);
+
+  const pagination = usePagination(filteredVehicles);
 
   function openCreateForm() {
     setFormVehicle(null);
@@ -125,10 +129,23 @@ export function VehiclesPageContent() {
                 : "Nenhum veículo cadastrado."
             }
           />
-        ) : view === "cards" ? (
-          <VehicleGrid vehicles={filteredVehicles} onEdit={openEditForm} onDelete={handleDeleteClick} />
         ) : (
-          <VehicleTable vehicles={filteredVehicles} onEdit={openEditForm} onDelete={handleDeleteClick} />
+          <>
+            {view === "cards" ? (
+              <VehicleGrid vehicles={pagination.pageItems} onEdit={openEditForm} onDelete={handleDeleteClick} />
+            ) : (
+              <VehicleTable vehicles={pagination.pageItems} onEdit={openEditForm} onDelete={handleDeleteClick} />
+            )}
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              itemLabel="veículos"
+              onPageChange={pagination.setPage}
+            />
+          </>
         )}
       </main>
 

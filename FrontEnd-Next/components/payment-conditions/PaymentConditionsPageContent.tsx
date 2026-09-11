@@ -8,7 +8,9 @@ import { CreateButton } from "@/components/ui/CreateButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { usePagination } from "@/hooks/usePagination";
 import { PaymentConditionFormModal } from "@/components/payment-conditions/PaymentConditionFormModal";
 import { PaymentConditionTable } from "@/components/payment-conditions/PaymentConditionTable";
 import { useOrders } from "@/hooks/useOrders";
@@ -38,6 +40,8 @@ export function PaymentConditionsPageContent() {
     if (!query) return paymentConditions;
     return paymentConditions.filter((condition) => condition.name.toLowerCase().includes(query));
   }, [paymentConditions, search]);
+
+  const pagination = usePagination(filteredPaymentConditions);
 
   function openCreateForm() {
     setFormPaymentCondition(null);
@@ -118,11 +122,22 @@ export function PaymentConditionsPageContent() {
             }
           />
         ) : (
-          <PaymentConditionTable
-            paymentConditions={filteredPaymentConditions}
-            onEdit={openEditForm}
-            onDelete={handleDeleteClick}
-          />
+          <>
+            <PaymentConditionTable
+              paymentConditions={pagination.pageItems}
+              onEdit={openEditForm}
+              onDelete={handleDeleteClick}
+            />
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              itemLabel="condições"
+              onPageChange={pagination.setPage}
+            />
+          </>
         )}
       </main>
 
