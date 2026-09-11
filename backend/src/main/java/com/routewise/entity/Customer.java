@@ -59,6 +59,12 @@ public class Customer {
   @Column(name = "address_state", nullable = false, length = 2)
   private String addressState;
 
+  @Column(name = "address_latitude")
+  private Double addressLatitude;
+
+  @Column(name = "address_longitude")
+  private Double addressLongitude;
+
   @CreationTimestamp
   @Column(name = "created_at", updatable = false, nullable = false)
   private Instant createdAt;
@@ -189,5 +195,21 @@ public class Customer {
 
   public void setAddressState(String addressState) {
     this.addressState = addressState;
+  }
+
+  public Double getAddressLatitude() {
+    return addressLatitude;
+  }
+
+  public void setAddressLatitude(Double addressLatitude) {
+    this.addressLatitude = addressLatitude;
+  }
+
+  public Double getAddressLongitude() {
+    return addressLongitude;
+  }
+
+  public void setAddressLongitude(Double addressLongitude) {
+    this.addressLongitude = addressLongitude;
   }
 }

@@ -1,5 +1,7 @@
 package com.routewise.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -31,6 +33,15 @@ public record AddressDto(
 
   @NotBlank(message = "Selecione a UF.")
   @Size(min = 2, max = 2, message = "UF inválida.")
-  String state
+  String state,
+
+  /** Coordenada opcional (geocoding). Só validada quando presente. */
+  @DecimalMin(value = "-90.0", message = "Latitude inválida.")
+  @DecimalMax(value = "90.0", message = "Latitude inválida.")
+  Double latitude,
+
+  @DecimalMin(value = "-180.0", message = "Longitude inválida.")
+  @DecimalMax(value = "180.0", message = "Longitude inválida.")
+  Double longitude
 
 ) {}
