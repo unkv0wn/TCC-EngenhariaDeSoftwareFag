@@ -1,0 +1,59 @@
+# Stack completa do RouteWise (banco + backend + frontend) pra rodar com um
+# `docker compose up` só — pensado pra mandar pra alguém testar sem precisar
+# instalar Java/Node/Postgres na máquina. Ver README-DOCKER.md.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: routewise-db
+    environment:
+      POSTGRES_DB: routewise
+      POSTGRES_USER: routewise
+      POSTGRES_PASSWORD: routewise
+    ports:
+      - "5434:5432"
+    volumes:
+      - routewise-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U routewise -d routewise"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: routewise-backend
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: routewise
+      DB_USER: routewise
+      DB_PASSWORD: routewise
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./FrontEnd-Next
+      args:
+        # Endpoint que o NAVEGADOR usa (fora do container) — por isso é localhost,
+        # não o nome do serviço docker.
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    container_name: routewise-frontend
+    environment:
+      # Endpoint que o próprio servidor Next.js usa (dentro da rede docker) pra
+      # repassar o login — esse sim usa o nome do serviço.
+      BACKEND_URL: http://backend:8080
+      # Precisa ser IDÊNTICA à routewise.jwt.secret do backend (application.properties).
+      JWT_SECRET: ANASKJDJKASHDJKSAHDJKASNDKJSAHDJKSAHDKJSADJKSAHDJKSAHDKJASHDKJSAD
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  routewise-db-data:
