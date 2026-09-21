@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 
 import { DEPOT_COORD } from "@/lib/routeConfig";
 import { routeMarkers, routePolylines, type LabeledStop } from "@/lib/routeResult";
@@ -13,6 +13,45 @@ interface RouteMapProps {
   result: RouteResultDto;
   /** Paradas de cliente com coordenada — pra casar o rótulo de cada waypoint otimizado. */
   stops?: LabeledStop[];
+}
+
+const DEPOT_COLOR = "#111827";
+const STOP_COLOR = "#4E79A7";
+
+/**
+ * Marcador como distintivo numerado em vez de bolinha lisa: o número é a posição da
+ * parada na ordem otimizada pelo A*, então o usuário lê a sequência direto no mapa
+ * sem ter que cruzar com a lista de trechos embaixo.
+ *
+ * É `divIcon` (HTML) e não `CircleMarker` (SVG) porque o Leaflet não desenha texto
+ * dentro de um CircleMarker. `className: ""` zera o estilo padrão do Leaflet, que
+ * viria com fundo branco e borda própria por cima do nosso.
+ */
+function markerIcon(order: number): L.DivIcon {
+  const isDepot = order === 0;
+  const size = isDepot ? 26 : 24;
+  const background = isDepot ? DEPOT_COLOR : "#ffffff";
+  const textColor = isDepot ? "#ffffff" : STOP_COLOR;
+  const borderColor = isDepot ? DEPOT_COLOR : STOP_COLOR;
+  // O depósito não entra na contagem de paradas — recebe um "P" de partida.
+  const content = isDepot ? "P" : String(order);
+
+  return L.divIcon({
+    className: "",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+    html: `<div style="
+      display:flex;align-items:center;justify-content:center;
+      width:${size}px;height:${size}px;
+      border-radius:9999px;
+      background:${background};
+      border:2px solid ${borderColor};
+      color:${textColor};
+      font-family:inherit;font-size:12px;font-weight:700;line-height:1;
+      box-shadow:0 1px 3px rgba(17,24,39,0.35);
+    ">${content}</div>`,
+  });
 }
 
 /** Enquadra o mapa nos pontos da rota — sem isso, o zoom fixo mostrava o continente inteiro. */
@@ -102,29 +141,20 @@ export function RouteMap({ result, stops = [] }: RouteMapProps) {
         <Polyline key={index} positions={line.positions} pathOptions={{ color: line.color, weight: 4, opacity: 0.85 }} />
       ))}
 
-      {markers.map((marker) =>
-        marker.order === 0 ? (
-          <CircleMarker
-            key="depot"
-            center={marker.position}
-            radius={9}
-            pathOptions={{ color: "#111827", fillColor: "#111827", fillOpacity: 1 }}
-          >
-            <Popup>{marker.label}</Popup>
-          </CircleMarker>
-        ) : (
-          <CircleMarker
-            key={marker.order}
-            center={marker.position}
-            radius={8}
-            pathOptions={{ color: "#4E79A7", fillColor: "#ffffff", fillOpacity: 1, weight: 3 }}
-          >
-            <Popup>
-              {marker.order}. {marker.label}
-            </Popup>
-          </CircleMarker>
-        )
-      )}
+      {markers.map((marker) => (
+        <Marker
+          key={marker.order}
+          position={marker.position}
+          icon={markerIcon(marker.order)}
+          // Sem isso as paradas seguintes ficam por cima das anteriores conforme o
+          // Leaflet as empilha por latitude; assim a ordem de leitura acompanha a rota.
+          zIndexOffset={marker.order}
+        >
+          <Popup>
+            {marker.order === 0 ? marker.label : `${marker.order}. ${marker.label}`}
+          </Popup>
+        </Marker>
+      ))}
     </MapContainer>
   );
 }
