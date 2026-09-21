@@ -140,6 +140,22 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(problem);
   }
 
+  // ── Invalid argument (validação de domínio feita em serviço) ─────────────
+
+  /**
+   * Regras que Bean Validation não expressa bem — listas fechadas de valores aceitos,
+   * campos exigidos só para certos tipos — são validadas no serviço e sinalizadas
+   * assim. É erro do cliente, então 400; sem este handler cairia no catch-all como 500.
+   */
+  @ExceptionHandler(IllegalArgumentException.class)
+  public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+    problem.setTitle("Invalid Request");
+    problem.setDetail(ex.getMessage());
+    log.warn("Invalid request: {}", ex.getMessage());
+    return ResponseEntity.badRequest().body(problem);
+  }
+
   // ── Catch-all ────────────────────────────────────────────────────────────
 
   @ExceptionHandler(Exception.class)
