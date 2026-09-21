@@ -18,6 +18,12 @@ export interface LabeledStop {
   lat: number;
   lng: number;
   label: string;
+  /**
+   * Quantos pedidos são entregues nesta parada. Vários pedidos do mesmo cliente
+   * compartilham endereço e viram uma parada só. Opcional porque rotas salvas
+   * antes do agrupamento não têm o campo — nesses casos trate como 1.
+   */
+  ordersCount?: number;
 }
 
 export interface RoutePolyline {
@@ -30,6 +36,8 @@ export interface RouteMarker {
   /** 0 = depósito; 1..n = paradas na ordem otimizada. */
   order: number;
   label: string;
+  /** Quantos pedidos esta parada atende (ver {@link LabeledStop.ordersCount}). */
+  ordersCount?: number;
 }
 
 function toLatLng(coordinates: [number, number][]): [number, number][] {
@@ -41,18 +49,23 @@ function isDepot(wp: OrderedWaypointDto, depot: LabeledStop | undefined): boolea
   return Math.abs(wp.lat - depot.lat) < 1e-7 && Math.abs(wp.lng - depot.lng) < 1e-7;
 }
 
-/** Rótulo da parada mais próxima da coordenada dada. */
-function nearestLabel(wp: OrderedWaypointDto, stops: LabeledStop[]): string {
-  let best = "";
+/** Parada mais próxima da coordenada dada. */
+function nearestStop(wp: OrderedWaypointDto, stops: LabeledStop[]): LabeledStop | undefined {
+  let best: LabeledStop | undefined;
   let bestDist = Infinity;
   for (const stop of stops) {
     const dist = (stop.lat - wp.lat) ** 2 + (stop.lng - wp.lng) ** 2;
     if (dist < bestDist) {
       bestDist = dist;
-      best = stop.label;
+      best = stop;
     }
   }
   return best;
+}
+
+/** Rótulo da parada mais próxima da coordenada dada. */
+function nearestLabel(wp: OrderedWaypointDto, stops: LabeledStop[]): string {
+  return nearestStop(wp, stops)?.label ?? "";
 }
 
 export function routePolylines(result: RouteResultDto): RoutePolyline[] {
@@ -82,11 +95,18 @@ export function routeMarkers(result: RouteResultDto, stops: LabeledStop[]): Rout
   const lastIsReturn = points.length > 1 && isDepot(points[points.length - 1], depot);
   const visible = lastIsReturn ? points.slice(0, -1) : points;
 
-  return visible.map((wp, index) => ({
-    position: [wp.lat, wp.lng] as [number, number],
-    order: index,
-    label: index === 0 || isDepot(wp, depot) ? DEPOT_LABEL : nearestLabel(wp, stops),
-  }));
+  return visible.map((wp, index) => {
+    if (index === 0 || isDepot(wp, depot)) {
+      return { position: [wp.lat, wp.lng] as [number, number], order: index, label: DEPOT_LABEL };
+    }
+    const stop = nearestStop(wp, stops);
+    return {
+      position: [wp.lat, wp.lng] as [number, number],
+      order: index,
+      label: stop?.label ?? "",
+      ordersCount: stop?.ordersCount,
+    };
+  });
 }
 
 /** Rótulos das paradas de cliente na ordem otimizada (sem depósito). */

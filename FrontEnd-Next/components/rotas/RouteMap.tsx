@@ -152,6 +152,9 @@ export function RouteMap({ result, stops = [] }: RouteMapProps) {
         >
           <Popup>
             {marker.order === 0 ? marker.label : `${marker.order}. ${marker.label}`}
+            {marker.ordersCount && marker.ordersCount > 1 ? (
+              <span className="mt-0.5 block text-gray-500">{marker.ordersCount} pedidos</span>
+            ) : null}
           </Popup>
         </Marker>
       ))}

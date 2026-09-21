@@ -102,19 +102,41 @@ export function GerarRotaScreen() {
   function handleGenerate() {
     const selected = eligibleOrders.filter((order) => selectedIds.has(order.id));
 
-    const routeStops: LabeledStop[] = selected.map((order) => {
+    // Um cliente costuma ter mais de um pedido, e todos saem no mesmo endereço.
+    // Cada endereço tem que virar UMA parada: mandar a mesma coordenada duas vezes
+    // faz o A* resolver um TSP com pontos duplicados (trechos de 0 km, espaço de
+    // estados inflado) e empilha dois marcadores no mesmo pixel do mapa, escondendo
+    // a numeração de um deles.
+    const byLocation = new Map<string, LabeledStop>();
+
+    for (const order of selected) {
       const customer = customers.find((option) => option.id === order.customerId);
       const label = customer?.name ?? "Cliente";
 
       // Coordenada real do cliente (geocoding no cadastro). Sem ela, cai pro
-      // aproximado por cidade + jitter, só pra rota não quebrar.
-      if (customer?.address.latitude != null && customer.address.longitude != null) {
-        return { label, lat: customer.address.latitude, lng: customer.address.longitude };
+      // aproximado por cidade + jitter, só pra rota não quebrar. O jitter usa o
+      // cliente como semente, não o pedido, senão dois pedidos do mesmo cliente
+      // sem coordenada cairiam em pontos diferentes e voltariam a duplicar parada.
+      const lat = customer?.address.latitude;
+      const lng = customer?.address.longitude;
+      const coord =
+        lat != null && lng != null
+          ? { lat, lng }
+          : jitterCoordinate(
+              order.customerId ?? order.id,
+              (customer ? CITY_COORDINATES[customer.address.city] : undefined) ?? CITY_COORDINATES["São Paulo"]
+            );
+
+      const key = `${coord.lat},${coord.lng}`;
+      const existing = byLocation.get(key);
+      if (existing) {
+        existing.ordersCount = (existing.ordersCount ?? 1) + 1;
+      } else {
+        byLocation.set(key, { label, lat: coord.lat, lng: coord.lng, ordersCount: 1 });
       }
-      const cityCoord = customer ? CITY_COORDINATES[customer.address.city] : undefined;
-      const coord = jitterCoordinate(order.id, cityCoord ?? CITY_COORDINATES["São Paulo"]);
-      return { label, lat: coord.lat, lng: coord.lng };
-    });
+    }
+
+    const routeStops: LabeledStop[] = [...byLocation.values()];
 
     // Ponto de partida: configurações da empresa; se ainda não carregou, cai no default.
     const depot = settings
