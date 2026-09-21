@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ClipboardList, Clock, IdCard, MapPinned, MessageCircle, Ruler, Truck } from "lucide-react";
 
-import { RouteDetailModal } from "@/components/rotas/RouteDetailModal";
 import type { Driver } from "@/hooks/useDrivers";
 import type { GeneratedRoute, RouteStatus } from "@/hooks/useRoutes";
 import type { Vehicle } from "@/hooks/useVehicles";
@@ -56,9 +55,9 @@ interface RouteCardProps {
 }
 
 export function RouteCard({ route, drivers, vehicles }: RouteCardProps) {
+  const router = useRouter();
   const driver = drivers.find((option) => option.id === route.driverId);
   const vehicle = vehicles.find((option) => option.id === route.vehicleId);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border border-gray-200 bg-white p-3.5 transition-shadow hover:shadow-md">
@@ -117,17 +116,13 @@ export function RouteCard({ route, drivers, vehicles }: RouteCardProps) {
         </button>
         <button
           type="button"
-          onClick={() => setIsDetailOpen(true)}
+          onClick={() => router.push(`/dashboard/rotas/${route.id}`)}
           className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white py-2 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
         >
           <MapPinned className="h-3.5 w-3.5" aria-hidden="true" />
           Acompanhar
         </button>
       </div>
-
-      {isDetailOpen && (
-        <RouteDetailModal route={route} drivers={drivers} vehicles={vehicles} onClose={() => setIsDetailOpen(false)} />
-      )}
     </div>
   );
 }
