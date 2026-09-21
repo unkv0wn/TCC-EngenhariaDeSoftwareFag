@@ -7,7 +7,7 @@ import { RouteDetailModal } from "@/components/rotas/RouteDetailModal";
 import type { Driver } from "@/hooks/useDrivers";
 import type { GeneratedRoute, RouteStatus } from "@/hooks/useRoutes";
 import type { Vehicle } from "@/hooks/useVehicles";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatCurrency, formatDateTime, formatWeight } from "@/lib/format";
 import { orderedStopSequence } from "@/lib/routeResult";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +82,9 @@ export function RouteCard({ route, drivers, vehicles }: RouteCardProps) {
         <span className="flex items-center gap-1.5">
           <Truck className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden="true" />
           {vehicle ? `${vehicle.plate} — ${vehicle.model}` : "—"}
+          {vehicle && (
+            <span className="font-bold text-gray-400">· {formatWeight(vehicle.capacityKg)}</span>
+          )}
         </span>
       </div>
 
