@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.stream.Collectors;
 
@@ -138,6 +139,22 @@ public class GlobalExceptionHandler {
     problem.setDetail("OSRM routing service returned an error: " + ex.getMessage());
     log.error("OSRM client error (status={})", ex.getHttpStatus(), ex);
     return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(problem);
+  }
+
+  // ── ResponseStatusException (status já decidido por quem lançou) ─────────
+
+  /**
+   * Quem lança já escolheu o status — {@code RouteController.streamEvents} usa isso pra
+   * sinalizar 404 quando o {@code requestId} do SSE não existe. Sem este handler a
+   * exceção caía no catch-all abaixo e virava 500, descartando o status pretendido.
+   */
+  @ExceptionHandler(ResponseStatusException.class)
+  public ResponseEntity<ProblemDetail> handleResponseStatus(ResponseStatusException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(ex.getStatusCode());
+    problem.setTitle(HttpStatus.valueOf(ex.getStatusCode().value()).getReasonPhrase());
+    problem.setDetail(ex.getReason());
+    log.warn("Request failed with {}: {}", ex.getStatusCode(), ex.getReason());
+    return ResponseEntity.status(ex.getStatusCode()).body(problem);
   }
 
   // ── Invalid argument (validação de domínio feita em serviço) ─────────────
