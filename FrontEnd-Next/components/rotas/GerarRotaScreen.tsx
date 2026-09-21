@@ -22,8 +22,8 @@ import { formatCurrency } from "@/lib/format";
 import { ApiError } from "@/lib/apiClient";
 import { calculateOrderTotal } from "@/lib/orderCalculations";
 import { DEPOT_COORD } from "@/lib/routeConfig";
-import { CITY_COORDINATES, jitterCoordinate } from "@/lib/routePrototype";
 import { waypointLabelAt, type LabeledStop } from "@/lib/routeResult";
+import { buildRouteStops } from "@/lib/routeStops";
 import type { WaypointDto } from "@/services/routes";
 import { cn } from "@/lib/utils";
 
@@ -32,10 +32,14 @@ const RouteMap = dynamic(() => import("@/components/rotas/RouteMap").then((mod) 
   loading: () => <div className="flex h-full w-full items-center justify-center rounded-xl bg-gray-100 text-xs font-semibold text-gray-400">Carregando mapa...</div>,
 });
 
-// O backend aceita de 2 a 15 waypoints (ceiling do A* exato — ver AStarWaypointOptimizer).
-// O primeiro é sempre o depósito, então sobram de 1 a 14 paradas de cliente — usamos
-// no mínimo 2 pra a rota fazer sentido.
-const MIN_STOPS = 2;
+// Dois tetos diferentes, porque pedido e parada não são a mesma coisa: vários
+// pedidos do mesmo endereço viram uma parada só (ver `buildRouteStops`).
+//
+// `MAX_ORDERS` é escolha de produto — quantos pedidos cabem numa carga.
+// `MAX_STOPS` vem do backend, que aceita de 2 a 15 waypoints (ceiling do A* exato,
+// ver AStarWaypointOptimizer); como o primeiro é sempre o depósito, sobram 14.
+const MIN_ORDERS = 2;
+const MAX_ORDERS = 20;
 const MAX_STOPS = 14;
 
 export function GerarRotaScreen() {
@@ -74,7 +78,17 @@ export function GerarRotaScreen() {
   }, [eligibleOrders, customers, search]);
 
   const selectedCount = selectedIds.size;
-  const canGenerate = selectedCount >= MIN_STOPS && selectedCount <= MAX_STOPS && !isComputing;
+
+  /** As paradas que os pedidos selecionados vão gerar — já agrupadas por endereço. */
+  const projectedStops = useMemo(
+    () => buildRouteStops(eligibleOrders.filter((order) => selectedIds.has(order.id)), customers),
+    [eligibleOrders, selectedIds, customers]
+  );
+  const stopCount = projectedStops.length;
+  const exceedsStops = stopCount > MAX_STOPS;
+
+  const canGenerate =
+    selectedCount >= MIN_ORDERS && selectedCount <= MAX_ORDERS && !exceedsStops && !isComputing;
 
   const selectedTotal = useMemo(
     () =>
@@ -102,41 +116,7 @@ export function GerarRotaScreen() {
   function handleGenerate() {
     const selected = eligibleOrders.filter((order) => selectedIds.has(order.id));
 
-    // Um cliente costuma ter mais de um pedido, e todos saem no mesmo endereço.
-    // Cada endereço tem que virar UMA parada: mandar a mesma coordenada duas vezes
-    // faz o A* resolver um TSP com pontos duplicados (trechos de 0 km, espaço de
-    // estados inflado) e empilha dois marcadores no mesmo pixel do mapa, escondendo
-    // a numeração de um deles.
-    const byLocation = new Map<string, LabeledStop>();
-
-    for (const order of selected) {
-      const customer = customers.find((option) => option.id === order.customerId);
-      const label = customer?.name ?? "Cliente";
-
-      // Coordenada real do cliente (geocoding no cadastro). Sem ela, cai pro
-      // aproximado por cidade + jitter, só pra rota não quebrar. O jitter usa o
-      // cliente como semente, não o pedido, senão dois pedidos do mesmo cliente
-      // sem coordenada cairiam em pontos diferentes e voltariam a duplicar parada.
-      const lat = customer?.address.latitude;
-      const lng = customer?.address.longitude;
-      const coord =
-        lat != null && lng != null
-          ? { lat, lng }
-          : jitterCoordinate(
-              order.customerId ?? order.id,
-              (customer ? CITY_COORDINATES[customer.address.city] : undefined) ?? CITY_COORDINATES["São Paulo"]
-            );
-
-      const key = `${coord.lat},${coord.lng}`;
-      const existing = byLocation.get(key);
-      if (existing) {
-        existing.ordersCount = (existing.ordersCount ?? 1) + 1;
-      } else {
-        byLocation.set(key, { label, lat: coord.lat, lng: coord.lng, ordersCount: 1 });
-      }
-    }
-
-    const routeStops: LabeledStop[] = [...byLocation.values()];
+    const routeStops: LabeledStop[] = buildRouteStops(selected, customers);
 
     // Ponto de partida: configurações da empresa; se ainda não carregou, cai no default.
     const depot = settings
@@ -218,7 +198,8 @@ export function GerarRotaScreen() {
                     canGenerate ? "bg-success-50 text-success-700" : "bg-gray-100 text-gray-500"
                   )}
                 >
-                  {selectedCount} de {MAX_STOPS} selecionados
+                  {selectedCount} de {MAX_ORDERS} selecionados
+                  {stopCount > 0 && ` · ${stopCount} ${stopCount === 1 ? "parada" : "paradas"}`}
                 </span>
               </div>
 
@@ -258,7 +239,7 @@ export function GerarRotaScreen() {
                   {visibleOrders.map((order) => {
                     const customer = customers.find((option) => option.id === order.customerId);
                     const checked = selectedIds.has(order.id);
-                    const disabled = !checked && selectedCount >= MAX_STOPS;
+                    const disabled = !checked && selectedCount >= MAX_ORDERS;
                     return (
                       <li key={order.id}>
                         <label
@@ -330,14 +311,20 @@ export function GerarRotaScreen() {
                 </>
               )}
             </button>
-            {selectedCount > 0 && selectedCount < MIN_STOPS && (
+            {selectedCount > 0 && selectedCount < MIN_ORDERS && (
               <p className="text-center text-[11px] font-semibold text-gray-400">
-                Selecione ao menos {MIN_STOPS} pedidos para gerar a rota.
+                Selecione ao menos {MIN_ORDERS} pedidos para gerar a rota.
               </p>
             )}
-            {selectedCount > MAX_STOPS && (
+            {selectedCount > MAX_ORDERS && (
               <p className="text-center text-[11px] font-semibold text-gray-400">
-                Máximo de {MAX_STOPS} pedidos por rota.
+                Máximo de {MAX_ORDERS} pedidos por rota.
+              </p>
+            )}
+            {exceedsStops && (
+              <p className="text-center text-[11px] font-semibold text-gray-400">
+                {stopCount} endereços diferentes — o máximo por rota é {MAX_STOPS}. Pedidos do mesmo
+                cliente contam como uma parada só.
               </p>
             )}
           </div>
