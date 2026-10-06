@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RouteWise — a TCC (Trabalho de Conclusão de Curso) project. It started as a pure route optimizer (place waypoints on a map, get the optimal visiting order) and grew into a small fleet-management system: cadastros (vehicles, drivers, products, customers, …), orders, and routes generated from those orders.
 
-The repo contains **three independently-developed pieces** — know which one you're in before editing:
+The repo contains **four independently-developed pieces** — know which one you're in before editing:
 
 - `backend/` — Java 21 + Spring Boot 3.2.5. The functional core plus the CRUD API. Persists to PostgreSQL (Spring Data JPA + Flyway). The route-computation pipeline (`RouteController` → `RouteOptimizerServiceImpl`) is still stateless; everything else (cadastros, orders, saved routes, settings) is database-backed.
 - `FrontEnd-Next/` — Next.js 16 + React 19 + Tailwind 4. **This is the production frontend** — everything shipped ends up here. It **is wired to the backend**: `lib/apiClient.ts` + `services/*.ts` call the real REST API, and the per-page hooks (`useVehicles`, `useOrders`, …) own loading/error state. It also calls four third-party public APIs directly from the browser (ViaCEP, BrasilAPI, FIPE via BrasilAPI, Nominatim) — those are unrelated to the RouteWise backend.
+- `mobile/` — Flutter (Dart 3.5+), Android first. The driver's field app: opens one route by token, registers arrival/delivery/incident, queues events while offline. Consumes `/api/mobile/**` only — never the manager's CRUD. Nothing is shared with `FrontEnd-Next/` except the API contract and the palette (`theme/app_theme.dart` mirrors `globals.css`; changing the brand means changing both). Design: `docs/superpowers/specs/2026-10-05-driver-mobile-app-design.md`.
 - `frontend/` — React 18 + Vite + Leaflet. A test-only prototype that validated the routing core end-to-end. **Does not ship.** Treat as frozen/reference; don't build new features here.
 
 ## Commands
@@ -70,9 +71,13 @@ All under `/api`. Every CRUD controller follows the same shape — `GET` (list),
 | `/api/orders` | `OrderController` | CRUD + `PATCH /{id}/status` |
 | `/api/routes` | `SavedRouteController` | `GET`, `GET /{id}`, `POST`, `PATCH /{id}/status`, `DELETE /{id}` |
 | `/api/routes/compute`, `/api/routes/events/{requestId}`, `/api/routes/graph-stats` | `RouteController` | the computation pipeline |
+| `/api/routes/{routeId}/events` | `RouteEventController` | `GET`, `POST`, `DELETE /{id}` — the tracking log |
+| `/api/mobile/routes/{token}` | `MobileRouteController` | `GET`, `POST /events`, `POST /events/batch` — the driver app, by token |
 | `/api/settings` | `CompanySettingsController` | `GET` + `PUT`, single row |
 
-`RouteController` and `SavedRouteController` **share the `/api/routes` base path** — the computation endpoints are fixed sub-paths (`/compute`, `/events/…`, `/graph-stats`) while the saved-route ones are the root and `/{id}`. Adding another fixed sub-path to either is fine; adding a second `/{something}` path variable is not.
+`RouteController`, `SavedRouteController` and `RouteEventController` **share the `/api/routes` base path**. They don't collide: the computation endpoints are fixed sub-paths (`/compute`, `/events/{requestId}`, `/graph-stats`), the saved-route ones are the root and `/{id}`, and the event log is `/{routeId}/events`. Note the near-miss — `/events/{requestId}` wants the literal in the *first* segment, `/{routeId}/events` in the *second*. Inverting either breaks routing with no compile error.
+
+The driver app has its own surface, `/api/mobile/**`, deliberately separate from the manager's CRUD: it is scoped to a single route by token, so a phone never holds an internal route id (and with it a path into the rest of the API, which is open).
 
 Errors come back as RFC 9457 problem details from `GlobalExceptionHandler`; the frontend's `apiClient.ts` reads `detail ?? title`.
 

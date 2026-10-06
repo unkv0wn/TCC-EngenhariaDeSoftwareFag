@@ -5,6 +5,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Corpo pra registrar um evento de rota.
@@ -33,6 +34,13 @@ public record RouteEventRequestDto(
 
   String notes,
 
-  Instant occurredAt
+  Instant occurredAt,
+
+  /**
+   * Id gerado pelo cliente, usado pela fila offline do app do motorista: reenviar o
+   * mesmo evento devolve o que já foi gravado em vez de duplicar. Nulo quando o gestor
+   * registra pela web, que não tem fila.
+   */
+  UUID clientEventId
 
 ) {}

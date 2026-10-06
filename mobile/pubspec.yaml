@@ -1,0 +1,37 @@
+name: routewise_driver
+description: App do motorista do RouteWise — abre a rota do dia por token e registra os eventos de campo.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Cliente HTTP. Sem Dio: o contrato é pequeno (três chamadas) e `http` já basta.
+  http: ^1.2.2
+
+  # Fila offline e token da rota. shared_preferences, e não sqflite, porque a fila
+  # guarda poucos eventos de uma vez e some assim que sincroniza — um banco embarcado
+  # seria infraestrutura demais pro problema. Se um dia a fila precisar de consulta ou
+  # ordenação, aí sim vale trocar.
+  shared_preferences: ^2.3.2
+
+  # Detecta volta de conexão pra disparar a sincronização.
+  connectivity_plus: ^6.0.5
+
+  # Abre Google Maps/Waze e o discador.
+  url_launcher: ^6.3.0
+
+  uuid: ^4.5.1
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

@@ -49,6 +49,13 @@ public class RouteEvent {
   @Column(name = "occurred_at", nullable = false)
   private Instant occurredAt;
 
+  /**
+   * Id gerado no celular, pra fila offline do app do motorista ser idempotente.
+   * Nulo nos eventos registrados pelo gestor na web, que não passam por fila.
+   */
+  @Column(name = "client_event_id")
+  private UUID clientEventId;
+
   @CreationTimestamp
   @Column(name = "created_at", updatable = false, nullable = false)
   private Instant createdAt;
@@ -119,6 +126,14 @@ public class RouteEvent {
 
   public void setOccurredAt(Instant occurredAt) {
     this.occurredAt = occurredAt;
+  }
+
+  public UUID getClientEventId() {
+    return clientEventId;
+  }
+
+  public void setClientEventId(UUID clientEventId) {
+    this.clientEventId = clientEventId;
   }
 
   public Instant getCreatedAt() {

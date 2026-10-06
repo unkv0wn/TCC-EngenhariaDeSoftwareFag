@@ -19,5 +19,7 @@ public record SavedRouteDto(
   UUID vehicleId,
   String departureTime,
   JsonNode result,
-  JsonNode stops
+  JsonNode stops,
+  /** Token do link que o gestor manda pro motorista. Segredo portador — só sai daqui pra quem já vê a rota. */
+  String accessToken
 ) {}

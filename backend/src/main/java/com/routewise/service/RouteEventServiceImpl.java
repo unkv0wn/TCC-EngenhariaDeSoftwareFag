@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -50,6 +51,15 @@ public class RouteEventServiceImpl implements IRouteEventService {
   public RouteEventDto create(UUID routeId, RouteEventRequestDto request) {
     requireRoute(routeId);
 
+    // Idempotência da fila offline: o app reenvia quando não teve certeza de que subiu.
+    // Devolver o que já existe é o que impede uma entrega de ser contada duas vezes.
+    if (request.clientEventId() != null) {
+      Optional<RouteEvent> existing = repository.findByClientEventId(request.clientEventId());
+      if (existing.isPresent()) {
+        return toDto(existing.get());
+      }
+    }
+
     String type = request.type().trim().toLowerCase();
     if (!VALID_TYPES.contains(type)) {
       throw new IllegalArgumentException(
@@ -77,6 +87,7 @@ public class RouteEventServiceImpl implements IRouteEventService {
     entity.setNotes(request.notes() == null || request.notes().isBlank() ? null : request.notes().trim());
     // Registrar algo que já aconteceu é o caso comum; sem `occurredAt` assume-se agora.
     entity.setOccurredAt(request.occurredAt() != null ? request.occurredAt() : Instant.now());
+    entity.setClientEventId(request.clientEventId());
 
     return toDto(repository.save(entity));
   }

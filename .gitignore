@@ -33,3 +33,12 @@ lerna-debug.log*
 
 # Brainstorming visual companion
 .superpowers/
+
+# Flutter / Dart (mobile/)
+# `android/` e `ios/` ficam versionados: o intent filter do deep link mora no
+# AndroidManifest.xml. `pubspec.lock` também — é um app, não uma biblioteca.
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/build/
+mobile/.packages

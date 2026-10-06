@@ -3,6 +3,7 @@ package com.routewise.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.routewise.auth.RouteAccessTokenGenerator;
 import com.routewise.dto.SavedRouteDto;
 import com.routewise.dto.SavedRouteRequestDto;
 import com.routewise.entity.SavedRoute;
@@ -33,10 +34,16 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
 
   private final SavedRouteRepository repository;
   private final ObjectMapper objectMapper;
+  private final RouteAccessTokenGenerator tokenGenerator;
 
-  public SavedRouteServiceImpl(SavedRouteRepository repository, ObjectMapper objectMapper) {
+  public SavedRouteServiceImpl(
+    SavedRouteRepository repository,
+    ObjectMapper objectMapper,
+    RouteAccessTokenGenerator tokenGenerator
+  ) {
     this.repository = repository;
     this.objectMapper = objectMapper;
+    this.tokenGenerator = tokenGenerator;
   }
 
   @Override
@@ -61,6 +68,9 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
     entity.setOrdersCount(request.ordersCount());
     entity.setTotalValue(request.totalValue());
     entity.setCompletedStops(0);
+    // Toda rota nasce com token: o gestor compartilha o link na hora que quiser,
+    // sem um passo extra de "gerar acesso".
+    entity.setAccessToken(tokenGenerator.generate());
     entity.setResult(writeJson(request.result()));
     entity.setStops(writeJson(request.stops()));
 
@@ -131,7 +141,8 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
       entity.getVehicleId(),
       entity.getDepartureTime(),
       readJson(entity.getResult()),
-      readJson(entity.getStops())
+      readJson(entity.getStops()),
+      entity.getAccessToken()
     );
   }
 }

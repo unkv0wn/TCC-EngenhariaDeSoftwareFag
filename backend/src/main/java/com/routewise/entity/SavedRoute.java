@@ -57,6 +57,13 @@ public class SavedRoute {
   @Column(name = "stops_json", nullable = false, columnDefinition = "text")
   private String stops;
 
+  /**
+   * Token de acesso do app do motorista. Segredo portador — quem tem o link tem a rota.
+   * Nulo nas rotas anteriores à V16; elas recebem um na primeira vez que forem compartilhadas.
+   */
+  @Column(name = "access_token", length = 43)
+  private String accessToken;
+
   @CreationTimestamp
   @Column(name = "created_at", updatable = false, nullable = false)
   private Instant createdAt;
@@ -163,6 +170,14 @@ public class SavedRoute {
 
   public void setStops(String stops) {
     this.stops = stops;
+  }
+
+  public String getAccessToken() {
+    return accessToken;
+  }
+
+  public void setAccessToken(String accessToken) {
+    this.accessToken = accessToken;
   }
 
   public Instant getCreatedAt() {
