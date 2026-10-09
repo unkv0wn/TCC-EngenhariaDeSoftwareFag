@@ -44,8 +44,8 @@ class RouteSummaryScreen extends StatelessWidget {
                 _summaryHeader(route),
                 _vehicleAndProgress(route, stops),
                 if (next != null) _nextStopCard(context, next),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 18, 16, 8),
                   child: Text(
                     'TODAS AS PARADAS',
                     style: TextStyle(

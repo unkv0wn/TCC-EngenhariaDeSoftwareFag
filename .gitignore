@@ -35,10 +35,6 @@ lerna-debug.log*
 .superpowers/
 
 # Flutter / Dart (mobile/)
-# `android/` e `ios/` ficam versionados: o intent filter do deep link mora no
-# AndroidManifest.xml. `pubspec.lock` também — é um app, não uma biblioteca.
-mobile/.dart_tool/
-mobile/.flutter-plugins
-mobile/.flutter-plugins-dependencies
-mobile/build/
-mobile/.packages
+# O mobile/.gitignore gerado pelo `flutter create` cobre o resto (build/, .dart_tool/,
+# .idea/, *.iml). `android/` e `pubspec.lock` ficam versionados de propósito: o intent
+# filter do deep link mora no AndroidManifest.xml, e é um app, não uma biblioteca.
