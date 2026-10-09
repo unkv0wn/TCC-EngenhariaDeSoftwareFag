@@ -89,7 +89,9 @@ public class RouteEventServiceImpl implements IRouteEventService {
     entity.setOccurredAt(request.occurredAt() != null ? request.occurredAt() : Instant.now());
     entity.setClientEventId(request.clientEventId());
 
-    return toDto(repository.save(entity));
+    // saveAndFlush, não save: o @CreationTimestamp só é preenchido no flush, e sem ele
+    // a resposta sairia com `createdAt: null` — um campo do DTO mentindo.
+    return toDto(repository.saveAndFlush(entity));
   }
 
   @Override

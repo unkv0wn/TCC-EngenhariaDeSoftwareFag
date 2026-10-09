@@ -19,6 +19,7 @@ import com.routewise.repository.VehicleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -173,7 +174,19 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
     return routeEventService.create(route.getId(), toServiceRequest(route, request));
   }
 
+  /**
+   * Sem transação própria, de propósito — e isso é o que faz o lote funcionar.
+   *
+   * <p>Com {@code @Transactional} aqui, cada {@code create()} entraria nesta mesma
+   * transação; o primeiro item inválido a lançar marcaria tudo como rollback-only, e o
+   * commit no fim estouraria {@code UnexpectedRollbackException} mesmo com a exceção
+   * tratada — derrubando também os eventos válidos. Era exatamente o que o retorno item
+   * a item existia pra evitar.
+   *
+   * <p>Fora de transação, cada {@code create()} abre a sua: um item falha sozinho.
+   */
   @Override
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public List<MobileEventBatchResultDto> createEvents(String accessToken, List<MobileEventRequestDto> requests) {
     SavedRoute route = requireRoute(accessToken);
 
