@@ -43,6 +43,23 @@ pnpm lint            # eslint
 
 Requires `NEXT_PUBLIC_API_URL` (browser → backend, e.g. `http://localhost:8080`), `BACKEND_URL` (Next server → backend, used only by the login route) and `JWT_SECRET` (must match `routewise.jwt.secret` in the backend) in `.env.local`. No test runner is configured — there are no tests here.
 
+### Driver app (`mobile/`, Flutter)
+
+```bash
+flutter pub get
+flutter analyze                  # full type check — this is the real compile gate for Dart
+flutter test                     # wire-contract tests against /api/mobile/**
+flutter devices                  # confirm the emulator or phone is visible
+flutter run -d <device> --dart-define=API_URL=http://10.0.2.2:8080
+flutter build apk --debug --dart-define=API_URL=<url>
+```
+
+`API_URL` points the app at the backend and defaults to `http://10.0.2.2:8080`, which is how the **Android emulator** reaches the host's localhost. On a physical device over USB, prefer `adb reverse tcp:8080 tcp:8080` plus `http://localhost:8080` — it needs neither the same Wi-Fi nor a firewall rule. Over Wi-Fi, use the host's LAN IP and open inbound 8080.
+
+Requires the Flutter SDK, a JDK 17–25 (the project's Gradle refuses 11) and Android SDK **36** — Flutter 3.47 rejects 35. Point Flutter at them once with `flutter config --android-sdk <path> --jdk-dir <path>`.
+
+Two `adb` binaries fight over port 5037 if scrcpy is also installed: it ships 36.0.0 while the SDK has 37.0.1, and whichever starts the server wins, leaving the other unable to see the device. Use the SDK's `platform-tools/adb.exe` while working on the app.
+
 ### Frontend test prototype (`frontend/`, does not ship)
 
 ```bash
@@ -154,6 +171,8 @@ Form validation is Zod schemas under `lib/validations/`, one file per resource; 
 ## Testing
 
 Backend has 10 JUnit 5 classes, **all** under `algorithm/` and `validation/` — the A* optimizer, its tie-break benchmark, Haversine, and the empirical cost calculators. There are **no tests for any controller, service or repository**, and no `@SpringBootTest` context test (which would need a running Postgres or Testcontainers — not wired in). `FrontEnd-Next/` has no tests and no runner. The only frontend tests (`useWaypoints`, `useSseListener`, Vitest) live in the frozen `frontend/` prototype.
+
+`mobile/` has `test/route_models_test.dart`, covering the wire contract with `/api/mobile/**`: event serialisation, the exact `type` strings the backend validates, and route parsing. That contract is the thing that breaks silently — a field renamed in Java still compiles on the Dart side and only surfaces as a rejected event, in the field.
 
 Keep this in mind when changing CRUD or status-transition logic: nothing will catch a regression for you.
 
