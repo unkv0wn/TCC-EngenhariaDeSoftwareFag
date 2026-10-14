@@ -46,6 +46,15 @@ public class SavedRouteController {
     return service.changeStatus(id, request.status());
   }
 
+  /**
+   * Emite um código de acesso novo. Usado para rotas anteriores à V17, que nasceram sem
+   * código, e para revogar um link que vazou — emitir outro invalida o anterior.
+   */
+  @PostMapping("/{id}/access-code")
+  public SavedRouteDto regenerateAccessCode(@PathVariable UUID id) {
+    return service.regenerateAccessCode(id);
+  }
+
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable UUID id) {

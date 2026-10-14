@@ -20,6 +20,6 @@ public record SavedRouteDto(
   String departureTime,
   JsonNode result,
   JsonNode stops,
-  /** Token do link que o gestor manda pro motorista. Segredo portador — só sai daqui pra quem já vê a rota. */
-  String accessToken
+  /** Código que o gestor compartilha com o motorista (QR, link ou ditado). Nulo em rotas anteriores à V17. */
+  String accessCode
 ) {}

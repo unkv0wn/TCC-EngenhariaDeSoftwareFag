@@ -3,7 +3,7 @@ package com.routewise.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.routewise.auth.RouteAccessTokenGenerator;
+import com.routewise.auth.RouteAccessCodeGenerator;
 import com.routewise.dto.SavedRouteDto;
 import com.routewise.dto.SavedRouteRequestDto;
 import com.routewise.entity.SavedRoute;
@@ -34,16 +34,16 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
 
   private final SavedRouteRepository repository;
   private final ObjectMapper objectMapper;
-  private final RouteAccessTokenGenerator tokenGenerator;
+  private final RouteAccessCodeGenerator codeGenerator;
 
   public SavedRouteServiceImpl(
     SavedRouteRepository repository,
     ObjectMapper objectMapper,
-    RouteAccessTokenGenerator tokenGenerator
+    RouteAccessCodeGenerator codeGenerator
   ) {
     this.repository = repository;
     this.objectMapper = objectMapper;
-    this.tokenGenerator = tokenGenerator;
+    this.codeGenerator = codeGenerator;
   }
 
   @Override
@@ -70,7 +70,7 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
     entity.setCompletedStops(0);
     // Toda rota nasce com token: o gestor compartilha o link na hora que quiser,
     // sem um passo extra de "gerar acesso".
-    entity.setAccessToken(tokenGenerator.generate());
+    entity.setAccessCode(codeGenerator.generate());
     entity.setResult(writeJson(request.result()));
     entity.setStops(writeJson(request.stops()));
 
@@ -103,6 +103,13 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
       );
     }
     entity.setStatus(status);
+    return toDto(repository.save(entity));
+  }
+
+  @Override
+  public SavedRouteDto regenerateAccessCode(UUID id) {
+    SavedRoute entity = findOrThrow(id);
+    entity.setAccessCode(codeGenerator.generate());
     return toDto(repository.save(entity));
   }
 
@@ -142,7 +149,7 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
       entity.getDepartureTime(),
       readJson(entity.getResult()),
       readJson(entity.getStops()),
-      entity.getAccessToken()
+      entity.getAccessCode()
     );
   }
 }

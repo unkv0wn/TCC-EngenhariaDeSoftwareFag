@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * Superfície do app do motorista, separada do CRUD do gestor de propósito.
  *
- * <p>O app enxerga uma rota só, pela {@code token}, e só pode fazer o que um motorista faz:
+ * <p>O app enxerga uma rota só, pelo {@code code}, e só pode fazer o que um motorista faz:
  * ler a rota e registrar evento. Reaproveitar {@code /api/routes/{id}} entregaria ao celular
  * o id interno e, com ele, o caminho pro resto da API — que hoje está aberta.
  *
@@ -24,7 +24,7 @@ import java.util.List;
  * eventos sobem em bloco quando a rede volta.
  */
 @RestController
-@RequestMapping("/api/mobile/routes/{token}")
+@RequestMapping("/api/mobile/routes/{code}")
 @Validated
 public class MobileRouteController {
 
@@ -35,21 +35,21 @@ public class MobileRouteController {
   }
 
   @GetMapping
-  public MobileRouteDto findByToken(@PathVariable String token) {
-    return service.findByToken(token);
+  public MobileRouteDto findByCode(@PathVariable String code) {
+    return service.findByCode(code);
   }
 
   @PostMapping("/events")
   @ResponseStatus(HttpStatus.CREATED)
-  public RouteEventDto createEvent(@PathVariable String token, @Valid @RequestBody MobileEventRequestDto request) {
-    return service.createEvent(token, request);
+  public RouteEventDto createEvent(@PathVariable String code, @Valid @RequestBody MobileEventRequestDto request) {
+    return service.createEvent(code, request);
   }
 
   @PostMapping("/events/batch")
   public List<MobileEventBatchResultDto> createEvents(
-    @PathVariable String token,
+    @PathVariable String code,
     @RequestBody @NotEmpty(message = "Envie ao menos um evento.") List<@Valid MobileEventRequestDto> requests
   ) {
-    return service.createEvents(token, requests);
+    return service.createEvents(code, requests);
   }
 }

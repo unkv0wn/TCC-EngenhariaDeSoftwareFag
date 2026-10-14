@@ -11,6 +11,6 @@ public interface SavedRouteRepository extends JpaRepository<SavedRoute, UUID> {
 
   List<SavedRoute> findAllByOrderByCreatedAtDesc();
 
-  /** Entrada do app do motorista: a rota é encontrada pelo token, nunca pelo id. */
-  Optional<SavedRoute> findByAccessToken(String accessToken);
+  /** Entrada do app do motorista: a rota é encontrada pelo código, nunca pelo id. */
+  Optional<SavedRoute> findByAccessCode(String accessCode);
 }

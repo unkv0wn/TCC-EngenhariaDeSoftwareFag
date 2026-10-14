@@ -9,9 +9,9 @@ import java.util.List;
 
 public interface IMobileRouteService {
 
-  MobileRouteDto findByToken(String accessToken);
+  MobileRouteDto findByCode(String accessCode);
 
-  RouteEventDto createEvent(String accessToken, MobileEventRequestDto request);
+  RouteEventDto createEvent(String accessCode, MobileEventRequestDto request);
 
-  List<MobileEventBatchResultDto> createEvents(String accessToken, List<MobileEventRequestDto> requests);
+  List<MobileEventBatchResultDto> createEvents(String accessCode, List<MobileEventRequestDto> requests);
 }

@@ -3,6 +3,7 @@ package com.routewise.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.routewise.auth.RouteAccessCodeGenerator;
 import com.routewise.dto.MobileEventBatchResultDto;
 import com.routewise.dto.MobileEventRequestDto;
 import com.routewise.dto.MobileRouteDto;
@@ -53,25 +54,28 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
   private final VehicleRepository vehicleRepository;
   private final IRouteEventService routeEventService;
   private final ObjectMapper objectMapper;
+  private final RouteAccessCodeGenerator codeGenerator;
 
   public MobileRouteServiceImpl(
     SavedRouteRepository routeRepository,
     DriverRepository driverRepository,
     VehicleRepository vehicleRepository,
     IRouteEventService routeEventService,
-    ObjectMapper objectMapper
+    ObjectMapper objectMapper,
+    RouteAccessCodeGenerator codeGenerator
   ) {
     this.routeRepository   = routeRepository;
     this.driverRepository  = driverRepository;
     this.vehicleRepository = vehicleRepository;
     this.routeEventService = routeEventService;
     this.objectMapper      = objectMapper;
+    this.codeGenerator     = codeGenerator;
   }
 
   @Override
   @Transactional(readOnly = true)
-  public MobileRouteDto findByToken(String accessToken) {
-    SavedRoute route = requireRoute(accessToken);
+  public MobileRouteDto findByCode(String accessCode) {
+    SavedRoute route = requireRoute(accessCode);
 
     Optional<Driver> driver = driverRepository.findById(route.getDriverId());
     Optional<Vehicle> vehicle = vehicleRepository.findById(route.getVehicleId());
@@ -79,7 +83,7 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
     JsonNode result = readJson(route.getResult());
 
     return new MobileRouteDto(
-      route.getAccessToken(),
+      route.getAccessCode(),
       route.getCreatedAt(),
       route.getStatus(),
       route.getDepartureTime(),
@@ -169,8 +173,8 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
   }
 
   @Override
-  public RouteEventDto createEvent(String accessToken, MobileEventRequestDto request) {
-    SavedRoute route = requireRoute(accessToken);
+  public RouteEventDto createEvent(String accessCode, MobileEventRequestDto request) {
+    SavedRoute route = requireRoute(accessCode);
     return routeEventService.create(route.getId(), toServiceRequest(route, request));
   }
 
@@ -187,8 +191,8 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
    */
   @Override
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
-  public List<MobileEventBatchResultDto> createEvents(String accessToken, List<MobileEventRequestDto> requests) {
-    SavedRoute route = requireRoute(accessToken);
+  public List<MobileEventBatchResultDto> createEvents(String accessCode, List<MobileEventRequestDto> requests) {
+    SavedRoute route = requireRoute(accessCode);
 
     List<MobileEventBatchResultDto> results = new ArrayList<>(requests.size());
     for (MobileEventRequestDto request : requests) {
@@ -225,8 +229,15 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
    * Token desconhecido devolve 404, nunca 403 — um 403 confirmaria que aquele token
    * existe, o que transforma a URL não-adivinhável num alvo de tentativa.
    */
-  private SavedRoute requireRoute(String accessToken) {
-    return routeRepository.findByAccessToken(accessToken)
+  private SavedRoute requireRoute(String accessCode) {
+    // Normaliza antes de consultar: o código chega de um QR Code (exato), mas também de
+    // alguém digitando o que ouviu por telefone — com hífen, em minúscula, com O no lugar
+    // de 0. Recusar por isso seria inventar um erro que não existe.
+    String normalized = codeGenerator.normalize(accessCode);
+    if (normalized == null) {
+      throw new ResourceNotFoundException("Rota não encontrada.");
+    }
+    return routeRepository.findByAccessCode(normalized)
       .orElseThrow(() -> new ResourceNotFoundException("Rota não encontrada."));
   }
 
