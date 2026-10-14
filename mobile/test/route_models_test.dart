@@ -74,7 +74,7 @@ void main() {
 
   group('MobileRoute', () {
     Map<String, dynamic> routeJson({List<Map<String, dynamic>>? stops}) => {
-          'accessToken': 'token-abc',
+          'accessCode': 'HWHSJ5GWA8JE',
           'createdAt': '2026-10-09T23:03:00Z',
           'status': 'em_rota',
           'departureTime': '20:02',

@@ -20,7 +20,7 @@ class ApiException implements Exception {
 
 /// Cliente da superfície `/api/mobile/**`.
 ///
-/// Só três chamadas, todas por token. O app não conhece id de rota.
+/// Só três chamadas, todas pelo código da rota. O app não conhece id de rota.
 class ApiClient {
   ApiClient({required this.baseUrl, http.Client? client}) : _client = client ?? http.Client();
 
@@ -36,18 +36,18 @@ class ApiClient {
 
   static const _timeout = Duration(seconds: 15);
 
-  Future<MobileRoute> fetchRoute(String token) async {
-    final response = await _get('/api/mobile/routes/$token');
+  Future<MobileRoute> fetchRoute(String code) async {
+    final response = await _get('/api/mobile/routes/$code');
     return MobileRoute.fromJson(jsonDecode(response) as Map<String, dynamic>);
   }
 
   /// Envia a fila inteira de uma vez. O servidor responde item a item: um evento
   /// recusado não derruba os outros, então o retorno diz quais podem sair da fila.
-  Future<Set<String>> syncEvents(String token, List<PendingEvent> events) async {
+  Future<Set<String>> syncEvents(String code, List<PendingEvent> events) async {
     if (events.isEmpty) return <String>{};
 
     final body = jsonEncode(events.map((event) => event.toJson()).toList());
-    final response = await _post('/api/mobile/routes/$token/events/batch', body);
+    final response = await _post('/api/mobile/routes/$code/events/batch', body);
     final results = jsonDecode(response) as List<dynamic>;
 
     return results

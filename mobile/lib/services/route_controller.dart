@@ -65,11 +65,11 @@ class RouteController extends ChangeNotifier {
     return null;
   }
 
-  Future<String?> savedToken() => _queue.readToken();
+  Future<String?> savedCode() => _queue.readCode();
 
-  /// Abre a rota pelo token. Se a rede falhar mas já houver rota carregada, mantém o que
+  /// Abre a rota pelo código. Se a rede falhar mas já houver rota carregada, mantém o que
   /// está na tela — é melhor um dado de minutos atrás do que uma tela vazia na rua.
-  Future<void> open(String token) async {
+  Future<void> open(String code) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -77,13 +77,13 @@ class RouteController extends ChangeNotifier {
     _pending = await _queue.load();
 
     try {
-      _route = await _api.fetchRoute(token);
-      await _queue.saveToken(token);
+      _route = await _api.fetchRoute(code);
+      await _queue.saveCode(code);
       _error = null;
       await _sync();
     } on ApiException catch (ex) {
       if (ex.isRouteGone) {
-        await _queue.clearToken();
+        await _queue.clearCode();
         _route = null;
       }
       _error = ex.message;
@@ -121,14 +121,14 @@ class RouteController extends ChangeNotifier {
   /// vira erro na tela, porque o evento continua guardado e o selo de pendentes já conta
   /// a história.
   Future<void> _sync() async {
-    final token = await _queue.readToken();
-    if (token == null || _pending.isEmpty) return;
+    final code = await _queue.readCode();
+    if (code == null || _pending.isEmpty) return;
 
     try {
-      final confirmed = await _api.syncEvents(token, _pending);
+      final confirmed = await _api.syncEvents(code, _pending);
       if (confirmed.isNotEmpty) {
         _pending = await _queue.removeConfirmed(confirmed);
-        _route = await _api.fetchRoute(token);
+        _route = await _api.fetchRoute(code);
       }
     } on ApiException {
       // Continua na fila. Nova tentativa quando a conexão voltar.
@@ -138,13 +138,13 @@ class RouteController extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    final token = await _queue.readToken();
-    if (token == null) return;
-    await open(token);
+    final code = await _queue.readCode();
+    if (code == null) return;
+    await open(code);
   }
 
   Future<void> close() async {
-    await _queue.clearToken();
+    await _queue.clearCode();
     _route = null;
     notifyListeners();
   }

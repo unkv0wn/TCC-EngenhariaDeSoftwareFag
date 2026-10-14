@@ -15,7 +15,7 @@ import '../models/route_models.dart';
 /// registro existe mas ainda não subiu.
 class EventQueue {
   static const _queueKey = 'routewise.pending_events';
-  static const _tokenKey = 'routewise.route_token';
+  static const _codeKey = 'routewise.route_code';
 
   Future<List<PendingEvent>> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -58,18 +58,18 @@ class EventQueue {
     );
   }
 
-  Future<String?> readToken() async {
+  Future<String?> readCode() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    return prefs.getString(_codeKey);
   }
 
-  Future<void> saveToken(String token) async {
+  Future<void> saveCode(String code) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
+    await prefs.setString(_codeKey, code);
   }
 
-  Future<void> clearToken() async {
+  Future<void> clearCode() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
+    await prefs.remove(_codeKey);
   }
 }

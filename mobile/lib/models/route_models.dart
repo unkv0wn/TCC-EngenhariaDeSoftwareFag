@@ -1,13 +1,13 @@
 /// Modelos do app, espelhando os DTOs de `/api/mobile/**`.
 ///
 /// Repare no que NÃO existe aqui: id de rota, de motorista ou de veículo. O app
-/// navega por token e recebe tudo já resolvido — ele não tem como, e não deve
+/// navega por código e recebe tudo já resolvido — ele não tem como, e não deve
 /// poder, montar uma chamada ao CRUD do gestor.
 library;
 
 class MobileRoute {
   const MobileRoute({
-    required this.accessToken,
+    required this.accessCode,
     required this.createdAt,
     required this.status,
     required this.departureTime,
@@ -23,7 +23,7 @@ class MobileRoute {
     required this.events,
   });
 
-  final String accessToken;
+  final String accessCode;
   final DateTime createdAt;
   final String status;
   final String departureTime;
@@ -50,7 +50,7 @@ class MobileRoute {
 
   factory MobileRoute.fromJson(Map<String, dynamic> json) {
     return MobileRoute(
-      accessToken: json['accessToken'] as String,
+      accessCode: json['accessCode'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
       status: json['status'] as String,
       departureTime: json['departureTime'] as String,

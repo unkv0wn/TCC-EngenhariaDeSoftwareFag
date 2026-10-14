@@ -24,6 +24,18 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Deep link routewise://rota/<codigo>: é o conteúdo do QR Code que o gestor
+                 mostra, e também o link que vai na mensagem do WhatsApp. Com isto, tanto a
+                 câmera nativa quanto o toque no link abrem o app já na rota certa.
+                 O launchMode singleTop acima garante que isso reaproveite a Activity em vez
+                 de empilhar outra quando o app já estiver aberto. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="routewise" android:host="rota"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
