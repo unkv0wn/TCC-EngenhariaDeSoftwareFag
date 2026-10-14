@@ -141,6 +141,12 @@ export interface SavedRoute {
   departureTime: string;
   result: RouteResultDto;
   stops: LabeledStop[];
+  /**
+   * Código que o motorista usa pra abrir a rota no app — vai no QR Code, no link do
+   * WhatsApp e no campo digitado. Nulo nas rotas criadas antes da V17; a tela de
+   * compartilhamento emite um sob demanda.
+   */
+  accessCode: string | null;
 }
 
 const ROUTES_PATH = "/api/routes";
@@ -155,6 +161,14 @@ export function createSavedRoute(payload: SavedRoutePayload): Promise<SavedRoute
 
 export function deleteSavedRoute(id: string): Promise<void> {
   return apiFetch<void>(`${ROUTES_PATH}/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Emite um código de acesso novo. Usado pelas rotas anteriores à V17, que nasceram sem
+ * código, e para revogar um link que vazou — o código novo invalida o anterior.
+ */
+export function regenerateAccessCode(id: string): Promise<SavedRoute> {
+  return apiFetch<SavedRoute>(`${ROUTES_PATH}/${id}/access-code`, { method: "POST" });
 }
 
 export function changeSavedRouteStatus(id: string, status: RouteStatus): Promise<SavedRoute> {

@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Clock, IdCard, Truck } from "lucide-react";
+import { ArrowLeft, Clock, IdCard, QrCode, Truck } from "lucide-react";
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { ShareRouteModal } from "@/components/rotas/ShareRouteModal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -69,6 +70,8 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
   const [tab, setTab] = useState<TrackingTab>("paradas");
   const [formState, setFormState] = useState<{ type?: RouteEventTypeValue; stopIndex?: number } | null>(null);
   const [eventToDelete, setEventToDelete] = useState<RouteEvent | null>(null);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [issuedCode, setIssuedCode] = useState<string | null>(null);
 
   const route = routes.find((option) => option.id === routeId);
   const driver = drivers.find((option) => option.id === route?.driverId);
@@ -154,14 +157,24 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
                   </span>
                 </div>
               </div>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-bold",
-                  STATUS_BADGE_STYLES[route.status]
-                )}
-              >
-                {STATUS_LABELS[route.status]}
-              </span>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsShareOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-success-200 bg-success-50 px-3 py-2 text-[12.5px] font-bold text-success-700 hover:bg-success-100"
+                >
+                  <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+                  Compartilhar
+                </button>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                    STATUS_BADGE_STYLES[route.status]
+                  )}
+                >
+                  {STATUS_LABELS[route.status]}
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
@@ -209,6 +222,16 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
             initialStopIndex={formState.stopIndex}
             onClose={() => setFormState(null)}
             onSubmit={handleCreateEvent}
+          />
+        )}
+
+        {isShareOpen && route && (
+          <ShareRouteModal
+            route={issuedCode ? { ...route, accessCode: issuedCode } : route}
+            driver={driver}
+            vehicle={vehicle}
+            onClose={() => setIsShareOpen(false)}
+            onCodeChanged={setIssuedCode}
           />
         )}
 

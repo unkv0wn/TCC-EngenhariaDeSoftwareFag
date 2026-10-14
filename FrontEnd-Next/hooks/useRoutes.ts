@@ -33,8 +33,14 @@ export interface GeneratedRoute {
   result: RouteResultDto;
   /** Paradas de cliente com coordenada — pra casar rótulo por coordenada. */
   stops: LabeledStop[];
-  /** Quantas paradas já foram concluídas — ainda mock (sem telemetria de entrega). */
+  /**
+   * Contador gravado na criação da rota. Não é a fonte do progresso: a tela de
+   * acompanhamento e o app derivam isso dos eventos de entrega. Mantido por
+   * compatibilidade com as rotas salvas antes do log de eventos existir.
+   */
   completedStops: number;
+  /** Código que o motorista usa pra abrir a rota no app. Nulo nas rotas anteriores à V17. */
+  accessCode: string | null;
 }
 
 export function useRoutes() {
