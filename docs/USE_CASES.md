@@ -1,275 +1,322 @@
 # USE CASES SPECIFICATION
-> **Project:** RouteWise — Urban Route Optimizer  
-> **Version:** 1.0  
-> **Date:** 2026-04-14  
-> **Status:** APPROVED  
-> **Author:** Use Case Analyst Agent  
+
+> **Project:** RouteWise — Urban Route Optimizer and Fleet Management
+> **Version:** 2.0
+> **First issued:** 2026-04-14 (v1.0)
+> **Revised:** 2026-10-14 — rewritten against the implemented system
+> **Status:** ACTIVE
+
+---
+
+## SCOPE NOTE
+
+v1.0 specified five use cases, all of them inside a single screen: drop pins, compute,
+watch the result. That flow survives as UC-05 and UC-06, but it is no longer the whole
+system. The operation now starts at a registration screen and ends on a driver's phone.
+
+The use cases below follow the real path of a delivery: register → order → invoice →
+route → dispatch → execute → track.
 
 ---
 
 ## ACTORS
 
-| Actor           | Type   | Description                                                                              |
-|-----------------|--------|------------------------------------------------------------------------------------------|
-| **User**        | Human  | Urban commuter, delivery planner, or logistics team member using the web interface.      |
-| **React Frontend** | System | Presents the map UI, manages waypoints, triggers requests, renders results.           |
-| **Spring Boot Backend** | System | Orchestrates A* computation, TSP ordering, SSE events, and OSRM validation.   |
-| **A* Engine**   | System | In-process Java service that computes shortest paths on the OSM graph.                   |
-| **OSRM API**    | External | Public demo routing API used for cross-validation of computed routes.                 |
+| Actor | Type | Description |
+|-------|------|-------------|
+| **Manager** (gestor) | Human | Runs the operation from the web dashboard: registrations, orders, routes, tracking. |
+| **Driver** (motorista) | Human | Executes the route in the field with the Android app. |
+| **Web frontend** | System | Next.js application; the manager's entire interface. |
+| **Driver app** | System | Flutter application; opens one route by token and registers field events. |
+| **Backend** | System | Spring Boot; owns the data, the solver and the API. |
+| **A\* solver** | System | In-process exact optimiser over the waypoint cost matrix. |
+| **OSRM API** | External | Public routing service: duration matrix and route geometry. |
+| **Lookup services** | External | ViaCEP, BrasilAPI and Nominatim, called from the browser to fill in addresses. |
 
 ---
 
-## UC-01 — Place Waypoints on the Map
+## UC-01 — Register a Customer with a Mappable Address
 
-**ID:** UC-01  
-**Title:** Waypoint Placement  
-**Actors:** User, React Frontend  
-**Source Stories:** US-01  
+**ID:** UC-01
+**Actors:** Manager, Web frontend, Lookup services
+**Source Stories:** US-04
 
 **Pre-conditions:**
-- The React application is running and the Leaflet map is rendered.
-- No route computation is in progress.
+- The manager is on `/dashboard/clientes`.
 
-**Main Flow (Happy Path):**
-1. User opens the application; the map is centered on a default urban location.
-2. User clicks on a location on the map.
-3. Frontend adds a numbered pin (marker) at the clicked coordinates.
-4. The waypoint appears in the waypoint list panel with its index number.
-5. User repeats steps 2–4 until they have the desired number of waypoints (max 10).
-6. The "Estimate Route" button becomes enabled once ≥ 2 waypoints are placed.
+**Main Flow:**
+1. Manager opens the registration form and chooses the person type and the register type (customer, supplier or both).
+2. Manager types the CNPJ; the frontend queries BrasilAPI and fills in company name, trade name and address.
+3. Manager types the CEP; the frontend queries ViaCEP and fills in street, district, city and state.
+4. Manager completes number and complement.
+5. On save, the frontend geocodes the address through Nominatim and presents the resulting point on a small map for confirmation.
+6. Manager confirms the point, or drags the pin to the correct spot.
+7. Backend persists the customer with its coordinate.
 
 **Alternative Flows:**
 
 | Code | Trigger | System Response |
 |------|---------|-----------------|
-| 1a | User attempts to place an 11th waypoint | Frontend shows a snackbar: *"Maximum of 10 waypoints reached."* No new pin is added. |
-| 4a | User clicks the ✖ button on a waypoint in the list | The pin is removed from the map and the list re-indexes. If < 2 remain, "Estimate Route" is disabled. |
-| 4b | User clicks an existing pin on the map | A tooltip shows the waypoint coordinates; no duplicate is added. |
+| 2a | CNPJ not found | The lookup fails silently; every field stays editable and the manager types them. |
+| 5a | Nominatim returns only a city-level match | The system rejects the low-confidence result and opens the map centred on the city for manual placement. |
+| 5b | Both geocoding attempts fail | The modal opens at the city centre and the manager positions the pin by hand. |
 
 **Post-conditions:**
-- The waypoint list contains 2–10 `{lat, lng}` coordinates.
-- The "Estimate Route" button reflects the correct enabled/disabled state.
+- The customer exists with a coordinate precise enough to become a route stop.
+
+**Note:** without a coordinate the customer still saves, but route generation will fall
+back to an approximate city point for it (see UC-05, alternative 2a).
 
 ---
 
-## UC-02 — Request Route Computation
+## UC-02 — Record an Order
 
-**ID:** UC-02  
-**Title:** Route Estimation Request  
-**Actors:** User, React Frontend, Spring Boot Backend  
-**Source Stories:** US-02  
+**ID:** UC-02
+**Actors:** Manager, Web frontend, Backend
+**Source Stories:** US-07
 
 **Pre-conditions:**
-- At least 2 waypoints are placed on the map.
-- No computation is currently in progress.
+- At least one customer and one product are registered.
 
-**Main Flow (Happy Path):**
-1. User selects route mode: `ROUND_TRIP` or `OPEN_ROUTE` via a toggle/dropdown.
-2. User clicks the "Estimate Route" button.
-3. Frontend generates a UUID `requestId`.
-4. Frontend opens an SSE connection to `GET /api/routes/events/{requestId}`.
-5. Frontend sends `POST /api/routes/compute` with waypoint list, `routeMode`, and `requestId`.
-6. Backend validates input (2–10 waypoints, valid coordinates, valid routeMode).
-7. Backend registers an `SseEmitter` keyed by `requestId`.
-8. Backend immediately emits `PROCESSING` event via SSE.
-9. Backend dispatches computation to a Java Virtual Thread.
-10. Frontend displays a loading spinner and status message: *"Computing route..."*
+**Main Flow:**
+1. Manager opens `/dashboard/pedidos` and starts a new order.
+2. Manager selects the customer through the search modal.
+3. Manager adds items: product, quantity and unit price, the price defaulting to the product's registered one.
+4. Manager optionally sets a discount, a freight cost and notes.
+5. The screen shows the running total and, when a vehicle is chosen, warns if the order's weight exceeds its capacity.
+6. Manager saves; the backend creates the order in status `aguardando` and opens its history with that first entry.
 
 **Alternative Flows:**
 
 | Code | Trigger | System Response |
 |------|---------|-----------------|
-| 6a | Fewer than 2 waypoints in request body | Backend returns HTTP 400 with `{ "error": "VALIDATION_ERROR", "message": "Minimum 2 waypoints required." }` |
-| 6b | Invalid coordinate (e.g., lat=200) | Backend returns HTTP 400 with field-level error details. |
-| 6c | Invalid `routeMode` value | Backend returns HTTP 400 with `{ "error": "INVALID_ENUM", "message": "routeMode must be ROUND_TRIP or OPEN_ROUTE." }` |
-| 4a | SSE connection fails before POST | Frontend shows error: *"Could not establish event stream."* Computation is not started. |
+| 3a | Quantity or price invalid | Zod validation blocks the submission and marks the field. |
+| 5a | Items exceed the selected vehicle's capacity | The screen warns but does not block: the manager may split the load later. |
 
 **Post-conditions:**
-- An SSE stream is open between frontend and backend for the `requestId`.
-- A `PROCESSING` event has been sent.
-- A Virtual Thread is actively computing the route.
+- An order exists in `aguardando`, invisible to route generation until invoiced.
 
 ---
 
-## UC-03 — Compute Optimal Route (A* + TSP)
+## UC-03 — Invoice Pending Orders
 
-**ID:** UC-03  
-**Title:** Route Computation (Backend)  
-**Actors:** Spring Boot Backend, A* Engine, OSRM API  
-**Source Stories:** US-02, US-03  
+**ID:** UC-03
+**Actors:** Manager, Web frontend, Backend
+**Source Stories:** US-09
 
-**Pre-conditions:**
-- Backend has received a valid `POST /api/routes/compute` request.
-- OSM graph is loaded in memory.
-
-**Main Flow (Happy Path):**
-1. `RouteOptimizerService` receives the ordered waypoint list.
-2. Service applies nearest-neighbour TSP heuristic to determine optimal visitation order.
-3. For each consecutive waypoint pair in the TSP-optimized order, `AStarService` computes the shortest path on the OSM graph.
-4. If `routeMode = ROUND_TRIP`, origin is appended as the final destination.
-5. All segment paths are concatenated into a full-route GeoJSON LineString.
-6. Total distance (km) and estimated duration (min) are aggregated across segments.
-7. *(Optional)* `OsrmClientService` makes a validation call to OSRM API with the optimized ordered waypoints.
-8. Backend emits `COMPLETED` SSE event with full result JSON payload.
-9. Backend closes the SSE emitter and removes it from the in-flight map.
+**Main Flow:**
+1. Manager filters the order list by status `aguardando`.
+2. Manager selects the orders that will leave.
+3. Manager triggers the bulk action to invoice them.
+4. For each order, the backend validates the transition `aguardando → faturado` and records a history entry.
 
 **Alternative Flows:**
 
 | Code | Trigger | System Response |
 |------|---------|-----------------|
-| 3a | A* finds no path between two waypoints (unreachable nodes) | Backend emits `ERROR` SSE event: `{ "type": "ERROR", "message": "No path found between waypoints X and Y. Check if points are reachable by road." }` |
-| 3b | Waypoint coordinates snap to ocean/off-road (no nearby graph node) | Backend returns nearest reachable graph node; if none within threshold (e.g., 500m), emits `ERROR`. |
-| 7a | OSRM API times out or returns non-200 | OSRM result is omitted from payload; log warning; A* result is returned normally. |
-| 7b | OSRM API is completely unreachable | Same as 7a — graceful degradation; no failure propagated. |
+| 4a | An order is no longer in `aguardando` | The backend rejects that transition with HTTP 409 and an explanatory message. |
 
 **Post-conditions:**
-- `COMPLETED` or `ERROR` event emitted on SSE channel.
-- SseEmitter removed from in-flight map.
-- Result JSON logged at INFO level with `requestId` correlation.
-
-**Example `COMPLETED` Payload:**
-```json
-{
-  "requestId": "f47ac10b-...",
-  "status": "COMPLETED",
-  "routeMode": "ROUND_TRIP",
-  "orderedWaypoints": [
-    { "index": 0, "lat": -23.5505, "lng": -46.6333 },
-    { "index": 1, "lat": -23.5620, "lng": -46.6548 },
-    { "index": 2, "lat": -23.5505, "lng": -46.6333 }
-  ],
-  "totalDistanceKm": 4.72,
-  "totalDurationMin": 14.3,
-  "geometry": {
-    "type": "LineString",
-    "coordinates": [[-46.6333, -23.5505], [-46.6420, -23.5560], ...]
-  },
-  "osrmValidation": {
-    "distanceKm": 4.85,
-    "durationMin": 14.9,
-    "status": "SUCCESS"
-  }
-}
-```
+- The selected orders are in `faturado` and eligible for a route.
 
 ---
 
-## UC-04 — Stream Real-Time Computation Events
+## UC-04 — Generate an Optimised Route
 
-**ID:** UC-04  
-**Title:** Event-Driven Status Updates  
-**Actors:** React Frontend, Spring Boot Backend  
-**Source Stories:** US-04  
+**ID:** UC-04
+**Actors:** Manager, Web frontend, Backend, A\* solver, OSRM API
+**Source Stories:** US-10, US-11, US-12
 
 **Pre-conditions:**
-- Frontend has opened an SSE connection to `GET /api/routes/events/{requestId}`.
-- Backend holds an active `SseEmitter` for the `requestId`.
+- At least two invoiced orders exist.
+- The company address is registered (otherwise a default origin is used).
 
-**Main Flow (Happy Path):**
-1. Backend emits `PROCESSING` event immediately upon receiving the compute request.
-2. Frontend displays status: *"Connecting..."* then *"Computing route..."*
-3. *(Optional intermediate events)* Backend may emit `PROGRESS` events for each completed segment.
-4. Upon completion, backend emits `COMPLETED` event.
-5. Frontend receives `COMPLETED` event and proceeds to UC-05 (Route Visualization).
-6. SSE connection is closed by the backend (`SseEmitter.complete()`).
+**Main Flow:**
+1. Manager opens `/dashboard/rotas/gerar`; the screen lists invoiced orders.
+2. Manager selects the orders to dispatch. The counter shows both selected orders and the stops they resolve to.
+3. Manager picks a driver and a vehicle.
+4. On "Gerar rota", the frontend groups the orders by delivery coordinate, so that several orders to one address become one stop.
+5. The frontend builds the waypoint list — company depot first, then the grouped stops — and posts it to `/api/routes/compute`.
+6. The backend returns a `requestId`; the frontend opens the SSE stream and shows the progress state.
+7. The backend fetches the OSRM duration matrix, runs the exact A\* search, requests the route geometry and emits `COMPLETED`.
+8. The map draws the route with numbered stops; the panel lists distance, duration and the leg breakdown.
 
 **Alternative Flows:**
 
 | Code | Trigger | System Response |
 |------|---------|-----------------|
-| 1a | Client SSE connection drops before COMPLETED | Backend detects `onError` / `onCompletion` callback; removes emitter from map; logs warning. |
-| 4a | Backend emits `ERROR` event | Frontend displays error snackbar with the error message. SSE connection closed. |
-| 6a | SSE TTL (180s) expires before computation completes | Backend completes-with-error; frontend shows timeout message. A* thread continues but result is discarded. |
+| 2a | A selected customer has no coordinate | Its position falls back to an approximate point for the city, seeded by the customer so that all their orders land on the same point. |
+| 2b | The selection resolves to more than 14 distinct addresses | Generation is blocked with a message naming the number of addresses and the ceiling, before any request is sent. |
+| 4a | Two orders share an address | They collapse into one stop whose popup shows how many orders it covers. |
+| 7a | OSRM `/table` unavailable | The matrix is approximated from straight-line distance at a fixed average speed; the route is still produced, with a coarser cost model. |
+| 7b | OSRM `/route` unavailable | The optimised order is returned without geometry; the map draws straight segments and the screen flags the degraded result. |
+| 7c | Computation fails | The stream emits `ERROR` and the screen shows the reason. |
 
 **Post-conditions:**
-- Frontend reflects the final computation status (success or error).
-- All SSE resources are cleaned up on both sides.
+- An optimal visiting order exists for the selected stops, drawn on the map, not yet saved.
 
 ---
 
-## UC-05 — Visualize the Route on the Map
+## UC-05 — Compute the Optimal Order (Backend)
 
-**ID:** UC-05  
-**Title:** Route Visualization  
-**Actors:** User, React Frontend  
-**Source Stories:** US-03  
+**ID:** UC-05
+**Actors:** Backend, A\* solver, OSRM API
+**Source Stories:** US-10
 
 **Pre-conditions:**
-- Frontend has received a `COMPLETED` SSE event with valid result JSON.
+- A validated request of 2–15 waypoints is pending for the given `requestId`.
 
-**Main Flow (Happy Path):**
-1. Frontend parses the GeoJSON LineString from the result payload.
-2. Leaflet renders the polyline on the map, fitting the viewport to the route bounds.
-3. Each waypoint marker is updated with its optimized sequence number.
-4. A summary panel renders:
-   - **Total Distance:** X.XX km
-   - **Estimated Duration:** X min
-   - **Route Mode:** Round Trip / Open Route
-5. User can hover over any waypoint for coordinate details.
-6. User can click "Reset" to clear all markers and start a new query.
+**Main Flow:**
+1. The SSE stream opens; the computation is dispatched to a virtual thread and the HTTP thread returns.
+2. `PROCESSING` is emitted.
+3. OSRM `/table` returns the N×N duration matrix.
+4. The solver initialises the state `(waypoint 0, bitmask 0b1)` and the open set ordered by `f = g + h`.
+5. For each expansion, the heuristic sums the minimum incoming edge of every unvisited waypoint, adding a return bound in `ROUND_TRIP`. Ties in `f` expand the larger `g` first.
+6. In `FIXED_START_END`, the final waypoint is not enterable until all others are visited.
+7. On reaching the goal state, the path is reconstructed through the parent table, giving the optimal order.
+8. OSRM `/route` is called for that order; per-leg geometry, distance and duration are assembled.
+9. `COMPLETED` is emitted with the ordered waypoints, segments, totals and geometry.
 
 **Alternative Flows:**
 
 | Code | Trigger | System Response |
 |------|---------|-----------------|
-| 1a | GeoJSON geometry is malformed | Frontend logs error, displays snackbar: *"Invalid route geometry received."* |
-| 6a | User clicks "Reset" during an active SSE stream | Frontend closes the EventSource, clears map, resets state. Backend cleans up when the SSE disconnects. |
+| 3a | `/table` fails | The matrix is built from Haversine distance at the configured average speed; the degradation is logged as affecting the optimisation input. |
+| 8a | `/route` fails | `osrmValidation` is set to `UNAVAILABLE` and the result goes out without geometry. |
+| 4a | A single waypoint | The trivial order is returned without searching. |
 
 **Post-conditions:**
-- Route is visible on the Leaflet map as a coloured polyline.
-- Summary metrics are displayed.
-- UI is ready for a new route estimation.
+- The emitted order is optimal for the matrix used — not an approximation.
 
 ---
 
-## SYSTEM SEQUENCE DIAGRAM — Full Route Computation Flow
+## UC-06 — Save and Dispatch the Route
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant FE as React Frontend
-    participant BE as Spring Boot Backend
-    participant AStar as A* Engine
-    participant OSRM as OSRM API
+**ID:** UC-06
+**Actors:** Manager, Web frontend, Backend
+**Source Stories:** US-13, US-14
 
-    U->>FE: Place waypoints + select route mode
-    U->>FE: Click "Estimate Route"
-    FE->>BE: GET /api/routes/events/{requestId} (SSE open)
-    BE-->>FE: SSE channel established
-    FE->>BE: POST /api/routes/compute {waypoints, routeMode, requestId}
-    BE-->>FE: SSE: {type: "PROCESSING"}
-    FE->>U: Show loading spinner
+**Main Flow:**
+1. With a computed route on screen, the manager confirms driver, vehicle and departure time.
+2. On "Salvar rota", the frontend posts the route with its algorithm snapshot and labelled stops.
+3. The backend persists it in status `planejada`, denormalises the totals and generates an access token.
+4. The route appears in `/dashboard/rotas`, where its card shows driver, vehicle and load capacity.
+5. The manager uses "Enviar" to share the route with the driver over WhatsApp.
 
-    BE->>AStar: applyTspHeuristic(waypoints)
-    AStar-->>BE: orderedWaypoints[]
+**Alternative Flows:**
 
-    loop For each consecutive pair
-        BE->>AStar: computePath(wpA, wpB)
-        AStar-->>BE: PathSegment {geometry, distance, duration}
-    end
+| Code | Trigger | System Response |
+|------|---------|-----------------|
+| 5a | The driver has no phone registered | The share button is disabled with an explanatory tooltip. |
 
-    BE->>OSRM: GET /route/v1/driving/{coords}
-    OSRM-->>BE: Route geometry + metadata (or timeout → degraded)
-
-    BE-->>FE: SSE: {type: "COMPLETED", payload: {...}}
-    BE->>BE: SseEmitter.complete() + remove from map
-
-    FE->>U: Render polyline on map
-    FE->>U: Display summary panel (distance, duration, mode)
-```
+**Post-conditions:**
+- The route is persisted, dispatched, and reachable by the driver through its token.
 
 ---
 
-## DARK CORNERS — Identified Edge Cases
+## UC-07 — Track a Route in Progress
 
-| # | Scenario | Risk | Mitigation |
-|---|----------|------|------------|
-| 1 | Waypoint placed in ocean or jungle (no road graph node nearby) | A* cannot snap to road network → no path | Snap to nearest node within 500m threshold; emit `ERROR` if none found |
-| 2 | Two waypoints produce an unreachable pair (island, disconnected graph) | A* exhausts open set with no solution | Emit `ERROR` event with specific waypoint pair identified |
-| 3 | SSE connection drops mid-computation | Resource leak in `ConcurrentHashMap` | Register `onCompletion` and `onError` callbacks on emitter to clean up |
-| 4 | SSE TTL expires before computation finishes | Client stuck; emitter in zombie state | TTL=180s + `completeWithError` triggers cleanup; frontend shows timeout |
-| 5 | OSRM API rate-limiting or downtime | Validation step delays or fails entire request | Graceful degradation: OSRM call has 5s timeout; failure → log + skip |
-| 6 | User sends duplicate `requestId` (replay attack) | Two emitters mapped to same key → overwrite | Backend checks map before inserting; returns 409 Conflict if key exists |
-| 7 | Very large OSM file causes OOM at startup | JVM heap exhausted | Document recommended JVM flags; config `routewise.osm.data-path` with regional subset |
-| 8 | User places all waypoints at the same location | TSP produces trivial route; A* returns 0-distance path | Valid edge case — return 0 km, 0 min with a warning in the response |
-| 9 | Browser doesn't support `EventSource` API | SSE consumer fails silently | Frontend checks for `EventSource` support; shows fallback message if absent |
+**ID:** UC-07
+**Actors:** Manager, Web frontend, Backend
+**Source Stories:** US-15
+
+**Main Flow:**
+1. From a route card, the manager opens `/dashboard/rotas/[id]`.
+2. The screen shows the map with numbered stops and a side panel switched by a top bar.
+3. **Paradas** lists the stops, marking as completed those with a delivery event, and offers a shortcut to register a delivery.
+4. **Eventos** lists the log chronologically, with type, author, referenced stop and note.
+5. **Documentos** shows the attachment list (demonstrative — no file is stored).
+6. The manager may register an event himself, choosing the author role.
+
+**Alternative Flows:**
+
+| Code | Trigger | System Response |
+|------|---------|-----------------|
+| 3a | The manager registers a delivery for an already delivered stop | The shortcut is not offered for completed stops. |
+| 6a | A delivery or arrival is registered without a stop | The backend rejects it with HTTP 400, naming the missing field. |
+| 6b | An event is deleted | The progress recomputes, since it derives from the events. |
+
+**Post-conditions:**
+- The route's progress reflects the events recorded, by either party.
+
+---
+
+## UC-08 — Open the Route on the Phone
+
+**ID:** UC-08
+**Actors:** Driver, Driver app, Backend
+**Source Stories:** US-16, US-17
+
+**Pre-conditions:**
+- The driver received the link, or the route's code.
+
+**Main Flow:**
+1. The driver opens the app and pastes the code (or follows the link, once deep linking is implemented).
+2. The app requests `GET /api/mobile/routes/{token}`.
+3. The backend returns the route, the stops already matched to customers and numbered, and the events so far — with no internal identifiers.
+4. The app shows the day's route: departure, vehicle with capacity, progress, next stop highlighted and the full stop list.
+5. The token is stored, so the next launch opens the route directly.
+
+**Alternative Flows:**
+
+| Code | Trigger | System Response |
+|------|---------|-----------------|
+| 2a | Unknown or revoked token | HTTP 404 and a message asking for a new link; the stored token is cleared. |
+| 2b | No connectivity, with a route previously loaded | The app keeps showing the loaded route rather than an empty screen. |
+
+**Post-conditions:**
+- The driver sees exactly one route — his own.
+
+---
+
+## UC-09 — Register a Delivery in the Field
+
+**ID:** UC-09
+**Actors:** Driver, Driver app, Backend
+**Source Stories:** US-18, US-19, US-20
+
+**Main Flow:**
+1. The driver opens the next stop and sees the customer, the orders and the actions.
+2. "Navegar até aqui" hands the coordinate to the device's map application.
+3. On arrival, the driver registers `chegada`.
+4. After handing over the goods, the driver taps "Entreguei" and confirms.
+5. The app generates an event identifier, writes the event to its local queue and updates the screen immediately.
+6. The app posts the queue; the backend stores the event, setting the author to the route's driver.
+7. The stop turns green, the progress advances and the next stop is highlighted.
+
+**Alternative Flows:**
+
+| Code | Trigger | System Response |
+|------|---------|-----------------|
+| 4a | Delivery not possible | The driver registers an `ocorrencia`, choosing a reason and describing what happened; a note is required. |
+| 5a | No connectivity | The event stays queued, the screen already reflects it, and a badge shows how many registrations are pending. |
+| 6a | Connectivity returns | The queue is sent as a batch; each item is answered individually and only the confirmed ones leave the queue. |
+| 6b | A request is retried after an unacknowledged response | The repeated event identifier makes the backend return the stored event — the delivery is not counted twice. |
+| 6c | One item in the batch is invalid | It is reported as rejected with its reason; the others are stored. |
+
+**Post-conditions:**
+- The event is recorded once, attributed to the driver, and visible on the manager's tracking screen.
+
+---
+
+## UC-10 — Register a Refuelling
+
+**ID:** UC-10
+**Actors:** Manager, Web frontend, Backend
+**Source Stories:** US-05
+
+**Main Flow:**
+1. Manager opens `/dashboard/abastecimentos` and starts a record.
+2. Manager selects vehicle and driver, and enters date, odometer, litres and price per litre.
+3. The screen shows the derived total and the kilometres run since that vehicle's previous refuelling.
+4. On save, the kilometres since the previous record are frozen onto the row.
+
+**Alternative Flows:**
+
+| Code | Trigger | System Response |
+|------|---------|-----------------|
+| 3a | First refuelling for the vehicle | The screen states so and no distance is derived. |
+| 4a | An earlier record is edited afterwards | Later records are **not** recomputed; the stored value is a snapshot, matching the backend's empirical consumption model. |
+
+**Post-conditions:**
+- The refuelling history can feed the empirical fuel-consumption analysis under
+  `com.routewise.validation`.
