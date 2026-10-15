@@ -7,7 +7,6 @@ import com.routewise.auth.RouteAccessCodeGenerator;
 import com.routewise.dto.MobileEventBatchResultDto;
 import com.routewise.dto.MobileEventRequestDto;
 import com.routewise.dto.MobileRouteDto;
-import com.routewise.dto.MobileStopDto;
 import com.routewise.dto.RouteEventDto;
 import com.routewise.dto.RouteEventRequestDto;
 import com.routewise.entity.Driver;
@@ -26,12 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.UUID;
 
 /**
- * Superfície do app do motorista. Tudo aqui entra por token, nunca por id.
+ * Superfície do app do motorista. Tudo aqui entra por código, nunca por id.
  *
  * <p>O papel do autor é fixado em {@code motorista} e o nome é lido do cadastro do
  * motorista escalado — nenhum dos dois vem do corpo da requisição. Um aparelho em campo
@@ -46,13 +42,12 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
   private static final String AUTHOR_ROLE = "motorista";
   private static final String FALLBACK_AUTHOR_NAME = "Motorista";
 
-  /** Tolerância pra reconhecer o waypoint de retorno como sendo o próprio depósito. */
-  private static final double COORD_EPSILON = 1e-7;
-
   private final SavedRouteRepository routeRepository;
   private final DriverRepository driverRepository;
   private final VehicleRepository vehicleRepository;
   private final IRouteEventService routeEventService;
+  private final ISavedRouteService savedRouteService;
+  private final RouteStopResolver stopResolver;
   private final ObjectMapper objectMapper;
   private final RouteAccessCodeGenerator codeGenerator;
 
@@ -61,6 +56,8 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
     DriverRepository driverRepository,
     VehicleRepository vehicleRepository,
     IRouteEventService routeEventService,
+    ISavedRouteService savedRouteService,
+    RouteStopResolver stopResolver,
     ObjectMapper objectMapper,
     RouteAccessCodeGenerator codeGenerator
   ) {
@@ -68,6 +65,8 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
     this.driverRepository  = driverRepository;
     this.vehicleRepository = vehicleRepository;
     this.routeEventService = routeEventService;
+    this.savedRouteService = savedRouteService;
+    this.stopResolver      = stopResolver;
     this.objectMapper      = objectMapper;
     this.codeGenerator     = codeGenerator;
   }
@@ -75,12 +74,35 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
   @Override
   @Transactional(readOnly = true)
   public MobileRouteDto findByCode(String accessCode) {
+    return toDto(requireRoute(accessCode));
+  }
+
+  /**
+   * Encerra a rota: é o motorista dizendo que voltou ao depósito.
+   *
+   * <p>Idempotente de propósito. O app chama isto com a rede que tem; se a resposta se
+   * perder no caminho e ele repetir, repetir tem que dar certo — senão o motorista fica
+   * com uma rota que o servidor já fechou e um botão que insiste em dar erro.
+   *
+   * <p>O evento de retorno não é criado aqui: ele sobe pela fila, junto com os outros, e
+   * carrega o horário em que o retorno de fato aconteceu — que pode ser bem antes deste
+   * pedido, se o pátio não tiver sinal.
+   */
+  @Override
+  public MobileRouteDto finish(String accessCode) {
     SavedRoute route = requireRoute(accessCode);
 
+    if (!RouteStatus.CONCLUIDA.equals(route.getStatus())) {
+      savedRouteService.changeStatus(route.getId(), RouteStatus.CONCLUIDA);
+      log.info("Rota encerrada pelo app do motorista: routeId={}", route.getId());
+    }
+    return toDto(requireRoute(accessCode));
+  }
+
+  private MobileRouteDto toDto(SavedRoute route) {
     Optional<Driver> driver = driverRepository.findById(route.getDriverId());
     Optional<Vehicle> vehicle = vehicleRepository.findById(route.getVehicleId());
     List<RouteEventDto> events = routeEventService.findByRoute(route.getId());
-    JsonNode result = readJson(route.getResult());
 
     return new MobileRouteDto(
       route.getAccessCode(),
@@ -95,81 +117,10 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
       vehicle.map(Vehicle::getPlate).orElse(null),
       vehicle.map(Vehicle::getModel).orElse(null),
       vehicle.map(Vehicle::getCapacityKg).orElse(0.0),
-      buildStops(route, events),
-      result,
+      stopResolver.resolve(route, events),
+      readJson(route.getResult()),
       events
     );
-  }
-
-  /**
-   * Casa cada waypoint otimizado com a parada de cliente mais próxima — mesma regra de
-   * {@code routeMarkers} em {@code FrontEnd-Next/lib/routeResult.ts}.
-   *
-   * <p>O {@code orderedWaypoints} do A* não referencia a parada de origem: só traz
-   * {@code lat/lng}. Por isso o rótulo é resolvido por proximidade, e não por posição.
-   * O índice 0 é o depósito; em {@code ROUND_TRIP} o último waypoint é o retorno a ele
-   * e também não vira parada.
-   */
-  private List<MobileStopDto> buildStops(SavedRoute route, List<RouteEventDto> events) {
-    JsonNode waypoints = readJson(route.getResult()).path("orderedWaypoints");
-    JsonNode stops = readJson(route.getStops());
-
-    if (!waypoints.isArray() || waypoints.isEmpty()) {
-      return List.of();
-    }
-
-    Set<Integer> delivered = events.stream()
-      .filter(event -> "entrega".equals(event.type()) && event.stopIndex() != null)
-      .map(RouteEventDto::stopIndex)
-      .collect(Collectors.toSet());
-
-    double depotLat = waypoints.get(0).path("lat").asDouble();
-    double depotLng = waypoints.get(0).path("lng").asDouble();
-
-    int last = waypoints.size() - 1;
-    boolean lastIsReturn = waypoints.size() > 1 && isSameCoord(waypoints.get(last), depotLat, depotLng);
-    int end = lastIsReturn ? last : waypoints.size();
-
-    List<MobileStopDto> result = new ArrayList<>();
-    for (int index = 1; index < end; index++) {
-      JsonNode waypoint = waypoints.get(index);
-      double lat = waypoint.path("lat").asDouble();
-      double lng = waypoint.path("lng").asDouble();
-
-      JsonNode nearest = nearestStop(stops, lat, lng);
-      result.add(new MobileStopDto(
-        index,
-        nearest != null ? nearest.path("label").asText("") : "",
-        lat,
-        lng,
-        nearest != null ? nearest.path("ordersCount").asInt(1) : 1,
-        delivered.contains(index)
-      ));
-    }
-    return result;
-  }
-
-  private boolean isSameCoord(JsonNode waypoint, double lat, double lng) {
-    return Math.abs(waypoint.path("lat").asDouble() - lat) < COORD_EPSILON
-        && Math.abs(waypoint.path("lng").asDouble() - lng) < COORD_EPSILON;
-  }
-
-  private JsonNode nearestStop(JsonNode stops, double lat, double lng) {
-    if (!stops.isArray()) {
-      return null;
-    }
-    JsonNode best = null;
-    double bestDistance = Double.MAX_VALUE;
-    for (JsonNode stop : stops) {
-      double dLat = stop.path("lat").asDouble() - lat;
-      double dLng = stop.path("lng").asDouble() - lng;
-      double distance = dLat * dLat + dLng * dLng;
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = stop;
-      }
-    }
-    return best;
   }
 
   @Override
@@ -226,7 +177,7 @@ public class MobileRouteServiceImpl implements IMobileRouteService {
   }
 
   /**
-   * Token desconhecido devolve 404, nunca 403 — um 403 confirmaria que aquele token
+   * Código desconhecido devolve 404, nunca 403 — um 403 confirmaria que aquele código
    * existe, o que transforma a URL não-adivinhável num alvo de tentativa.
    */
   private SavedRoute requireRoute(String accessCode) {

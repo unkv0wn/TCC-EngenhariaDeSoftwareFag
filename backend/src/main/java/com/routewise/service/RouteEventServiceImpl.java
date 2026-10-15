@@ -3,6 +3,7 @@ package com.routewise.service;
 import com.routewise.dto.RouteEventDto;
 import com.routewise.dto.RouteEventRequestDto;
 import com.routewise.entity.RouteEvent;
+import com.routewise.entity.SavedRoute;
 import com.routewise.exception.ResourceNotFoundException;
 import com.routewise.repository.RouteEventRepository;
 import com.routewise.repository.SavedRouteRepository;
@@ -34,10 +35,16 @@ public class RouteEventServiceImpl implements IRouteEventService {
 
   private final RouteEventRepository repository;
   private final SavedRouteRepository routeRepository;
+  private final RouteStopResolver stopResolver;
 
-  public RouteEventServiceImpl(RouteEventRepository repository, SavedRouteRepository routeRepository) {
+  public RouteEventServiceImpl(
+    RouteEventRepository repository,
+    SavedRouteRepository routeRepository,
+    RouteStopResolver stopResolver
+  ) {
     this.repository = repository;
     this.routeRepository = routeRepository;
+    this.stopResolver = stopResolver;
   }
 
   @Override
@@ -49,15 +56,29 @@ public class RouteEventServiceImpl implements IRouteEventService {
 
   @Override
   public RouteEventDto create(UUID routeId, RouteEventRequestDto request) {
-    requireRoute(routeId);
+    SavedRoute route = requireRoute(routeId);
 
     // Idempotência da fila offline: o app reenvia quando não teve certeza de que subiu.
     // Devolver o que já existe é o que impede uma entrega de ser contada duas vezes.
+    //
+    // Vem antes das validações de propósito: um evento já gravado tem que continuar
+    // sendo aceito mesmo que a regra tenha mudado desde então — em particular depois do
+    // encerramento da rota, quando o reenvio do último lote cairia no bloqueio abaixo e
+    // o app ficaria com eventos presos na fila, tentando para sempre.
     if (request.clientEventId() != null) {
       Optional<RouteEvent> existing = repository.findByClientEventId(request.clientEventId());
       if (existing.isPresent()) {
         return toDto(existing.get());
       }
+    }
+
+    // Rota encerrada é fechada para registro novo: depois dela o histórico é o que
+    // alimenta relatório e conferência, e um evento chegando atrasado mudaria um número
+    // que alguém já leu. Corrigir uma rota fechada é trabalho do gestor, na web.
+    if (RouteStatus.CONCLUIDA.equals(route.getStatus())) {
+      throw new IllegalArgumentException(
+        "Esta rota já foi encerrada e não aceita novos registros. Fale com o gestor."
+      );
     }
 
     String type = request.type().trim().toLowerCase();
@@ -77,6 +98,8 @@ public class RouteEventServiceImpl implements IRouteEventService {
     if (TYPES_REQUIRING_STOP.contains(type) && request.stopIndex() == null) {
       throw new IllegalArgumentException("Eventos de '" + type + "' precisam indicar a parada.");
     }
+
+    requireStopInRoute(route, request.stopIndex());
 
     RouteEvent entity = new RouteEvent(UUID.randomUUID());
     entity.setRouteId(routeId);
@@ -101,10 +124,38 @@ public class RouteEventServiceImpl implements IRouteEventService {
     repository.delete(entity);
   }
 
-  private void requireRoute(UUID routeId) {
-    if (!routeRepository.existsById(routeId)) {
-      throw new ResourceNotFoundException("Rota não encontrada: " + routeId);
+  /**
+   * O índice tem que ser uma parada que esta rota realmente tem.
+   *
+   * <p>Sem isto, um evento apontando para a parada 9 de uma rota de 5 paradas entra
+   * calado: não aparece em tela nenhuma, mas conta no histórico e no total de entregues.
+   * Foi exatamente o que a fila offline, antes separada por rota, conseguia produzir ao
+   * trocar de rota com eventos pendentes — e o servidor é o único lugar onde isso dá para
+   * barrar de vez, inclusive para um app desatualizado.
+   *
+   * <p>Rota sem resultado de otimização gravado não tem índice que possa ser conferido;
+   * nesse caso não há o que validar.
+   */
+  private void requireStopInRoute(SavedRoute route, Integer stopIndex) {
+    if (stopIndex == null) {
+      return;
     }
+
+    int stops = stopResolver.countStops(route);
+    if (stops == 0) {
+      return;
+    }
+
+    if (stopIndex < 1 || stopIndex > stops) {
+      throw new IllegalArgumentException(
+        "A parada " + stopIndex + " não existe nesta rota, que tem " + stops + " paradas."
+      );
+    }
+  }
+
+  private SavedRoute requireRoute(UUID routeId) {
+    return routeRepository.findById(routeId)
+      .orElseThrow(() -> new ResourceNotFoundException("Rota não encontrada: " + routeId));
   }
 
   private RouteEventDto toDto(RouteEvent entity) {

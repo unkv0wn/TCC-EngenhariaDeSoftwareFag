@@ -10,7 +10,7 @@ The repo contains **four independently-developed pieces** — know which one you
 
 - `backend/` — Java 21 + Spring Boot 3.2.5. The functional core plus the CRUD API. Persists to PostgreSQL (Spring Data JPA + Flyway). The route-computation pipeline (`RouteController` → `RouteOptimizerServiceImpl`) is still stateless; everything else (cadastros, orders, saved routes, settings) is database-backed.
 - `FrontEnd-Next/` — Next.js 16 + React 19 + Tailwind 4. **This is the production frontend** — everything shipped ends up here. It **is wired to the backend**: `lib/apiClient.ts` + `services/*.ts` call the real REST API, and the per-page hooks (`useVehicles`, `useOrders`, …) own loading/error state. It also calls four third-party public APIs directly from the browser (ViaCEP, BrasilAPI, FIPE via BrasilAPI, Nominatim) — those are unrelated to the RouteWise backend.
-- `mobile/` — Flutter (Dart 3.5+), Android first. The driver's field app: opens one route by token, registers arrival/delivery/incident, queues events while offline. Consumes `/api/mobile/**` only — never the manager's CRUD. Nothing is shared with `FrontEnd-Next/` except the API contract and the palette (`theme/app_theme.dart` mirrors `globals.css`; changing the brand means changing both). Design: `docs/superpowers/specs/2026-10-05-driver-mobile-app-design.md`.
+- `mobile/` — Flutter (Dart 3.5+), Android first. The driver's field app: opens one route by access code (QR, `routewise://rota/<code>` deep link or typed), registers arrival/delivery/incident, queues events while offline, and closes the route at the end of the day so the next one can be opened. Consumes `/api/mobile/**` only — never the manager's CRUD. Nothing is shared with `FrontEnd-Next/` except the API contract and the palette (`theme/app_theme.dart` mirrors `globals.css`; changing the brand means changing both). Design: `docs/superpowers/specs/2026-10-05-driver-mobile-app-design.md`.
 - `frontend/` — React 18 + Vite + Leaflet. A test-only prototype that validated the routing core end-to-end. **Does not ship.** Treat as frozen/reference; don't build new features here.
 
 ## Commands
@@ -89,12 +89,16 @@ All under `/api`. Every CRUD controller follows the same shape — `GET` (list),
 | `/api/routes` | `SavedRouteController` | `GET`, `GET /{id}`, `POST`, `PATCH /{id}/status`, `DELETE /{id}` |
 | `/api/routes/compute`, `/api/routes/events/{requestId}`, `/api/routes/graph-stats` | `RouteController` | the computation pipeline |
 | `/api/routes/{routeId}/events` | `RouteEventController` | `GET`, `POST`, `DELETE /{id}` — the tracking log |
-| `/api/mobile/routes/{token}` | `MobileRouteController` | `GET`, `POST /events`, `POST /events/batch` — the driver app, by token |
+| `/api/mobile/routes/{code}` | `MobileRouteController` | `GET`, `POST /finish`, `POST /events`, `POST /events/batch` — the driver app, by access code |
 | `/api/settings` | `CompanySettingsController` | `GET` + `PUT`, single row |
 
 `RouteController`, `SavedRouteController` and `RouteEventController` **share the `/api/routes` base path**. They don't collide: the computation endpoints are fixed sub-paths (`/compute`, `/events/{requestId}`, `/graph-stats`), the saved-route ones are the root and `/{id}`, and the event log is `/{routeId}/events`. Note the near-miss — `/events/{requestId}` wants the literal in the *first* segment, `/{routeId}/events` in the *second*. Inverting either breaks routing with no compile error.
 
-The driver app has its own surface, `/api/mobile/**`, deliberately separate from the manager's CRUD: it is scoped to a single route by token, so a phone never holds an internal route id (and with it a path into the rest of the API, which is open).
+The driver app has its own surface, `/api/mobile/**`, deliberately separate from the manager's CRUD: it is scoped to a single route by access code, so a phone never holds an internal route id (and with it a path into the rest of the API, which is open).
+
+A route whose status is `concluida` **rejects new events** — `RouteEventServiceImpl` raises `IllegalArgumentException` (400), and in a batch that comes back as a per-item rejection. The idempotency check on `clientEventId` runs *before* that guard, so an offline queue re-sending its last batch after the route closed still succeeds. `POST /finish` is idempotent for the same reason: the phone retries on a lost response. Deleting an event stays allowed on a closed route — it is the manager's correction path, and both apps point the driver to it.
+
+`stopIndex` is validated against the route's own stop count by `RouteStopResolver.countStops`. The resolver exists because `MobileRouteServiceImpl` (building the screen) and `RouteEventServiceImpl` (rejecting an impossible index) must agree on which waypoints count as stops — the depot and the `ROUND_TRIP` return leg do not.
 
 Errors come back as RFC 9457 problem details from `GlobalExceptionHandler`; the frontend's `apiClient.ts` reads `detail ?? title`.
 
@@ -172,7 +176,7 @@ Form validation is Zod schemas under `lib/validations/`, one file per resource; 
 
 Backend has 10 JUnit 5 classes, **all** under `algorithm/` and `validation/` — the A* optimizer, its tie-break benchmark, Haversine, and the empirical cost calculators. There are **no tests for any controller, service or repository**, and no `@SpringBootTest` context test (which would need a running Postgres or Testcontainers — not wired in). `FrontEnd-Next/` has no tests and no runner. The only frontend tests (`useWaypoints`, `useSseListener`, Vitest) live in the frozen `frontend/` prototype.
 
-`mobile/` has `test/route_models_test.dart`, covering the wire contract with `/api/mobile/**`: event serialisation, the exact `type` strings the backend validates, and route parsing. That contract is the thing that breaks silently — a field renamed in Java still compiles on the Dart side and only surfaces as a rejected event, in the field.
+`mobile/` has `test/route_models_test.dart`, covering the wire contract with `/api/mobile/**`: event serialisation, the exact `type` strings the backend validates, and route parsing. That contract is the thing that breaks silently — a field renamed in Java still compiles on the Dart side and only surfaces as a rejected event, in the field. `test/access_code_test.dart` fixes what the app accepts as a code (QR, deep link, typed), and `test/event_queue_test.dart` pins the offline queue being **per route**: a single shared queue used to push the previous route's pending delivery into the newly opened one.
 
 Keep this in mind when changing CRUD or status-transition logic: nothing will catch a regression for you.
 

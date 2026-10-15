@@ -11,6 +11,8 @@ interface StopsPanelProps {
   route: GeneratedRoute;
   /** Índices de parada com evento de entrega registrado. */
   deliveredStopIndexes: Set<number>;
+  /** Rota encerrada: não aceita mais registro, nem daqui nem do app do motorista. */
+  locked?: boolean;
   onRegisterDelivery: (stopIndex: number) => void;
 }
 
@@ -20,7 +22,12 @@ interface StopsPanelProps {
  * entrega — não do `completedStops` gravado na rota, que era um número fixo do
  * mockup anterior.
  */
-export function StopsPanel({ route, deliveredStopIndexes, onRegisterDelivery }: StopsPanelProps) {
+export function StopsPanel({
+  route,
+  deliveredStopIndexes,
+  locked = false,
+  onRegisterDelivery,
+}: StopsPanelProps) {
   const markers = routeMarkers(route.result, route.stops).filter((marker) => marker.order !== 0);
 
   if (markers.length === 0) {
@@ -72,6 +79,7 @@ export function StopsPanel({ route, deliveredStopIndexes, onRegisterDelivery }: 
               ) : (
                 <>
                   <Circle className="h-4 w-4 shrink-0 text-gray-300" aria-hidden="true" />
+                  {locked ? null : (
                   <button
                     type="button"
                     onClick={() => onRegisterDelivery(marker.order)}
@@ -81,6 +89,7 @@ export function StopsPanel({ route, deliveredStopIndexes, onRegisterDelivery }: 
                   >
                     <PackageCheck className="h-4 w-4" aria-hidden="true" />
                   </button>
+                  )}
                 </>
               )}
             </li>

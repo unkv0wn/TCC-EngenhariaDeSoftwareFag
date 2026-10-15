@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Flag,
   Fuel,
+  Lock,
   MapPin,
   PackageCheck,
   Plus,
@@ -38,6 +39,12 @@ interface EventsPanelProps {
   error: string | null;
   /** Rótulo da parada por índice, pra mostrar o nome em vez de só o número. */
   stopLabelByIndex: Map<number, string>;
+  /**
+   * Rota encerrada: o backend recusa evento novo (ver RouteEventServiceImpl), então o
+   * botão de registrar sai em vez de virar um erro. Apagar continua liberado — é o
+   * caminho de correção que o app do motorista indica quando algo sai errado.
+   */
+  locked?: boolean;
   onCreate: () => void;
   onDelete: (event: RouteEvent) => void;
 }
@@ -47,6 +54,7 @@ export function EventsPanel({
   isLoading,
   error,
   stopLabelByIndex,
+  locked = false,
   onCreate,
   onDelete,
 }: EventsPanelProps) {
@@ -54,14 +62,21 @@ export function EventsPanel({
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between">
         <p className="text-[13px] font-extrabold text-gray-900">Eventos</p>
-        <button
-          type="button"
-          onClick={onCreate}
-          className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-primary-700"
-        >
-          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-          Registrar
-        </button>
+        {locked ? (
+          <span className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-[12px] font-bold text-gray-500">
+            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            Rota encerrada
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-primary-700"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Registrar
+          </button>
+        )}
       </div>
 
       {isLoading ? (

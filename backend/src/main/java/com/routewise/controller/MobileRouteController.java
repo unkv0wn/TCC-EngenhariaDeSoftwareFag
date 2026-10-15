@@ -39,6 +39,16 @@ public class MobileRouteController {
     return service.findByCode(code);
   }
 
+  /**
+   * Encerra a rota. Pedido separado do evento de retorno de propósito: o evento é um
+   * registro histórico que sobe pela fila offline, com o horário em que aconteceu, e o
+   * encerramento é uma mudança de estado que só faz sentido com o servidor na mão.
+   */
+  @PostMapping("/finish")
+  public MobileRouteDto finish(@PathVariable String code) {
+    return service.finish(code);
+  }
+
   @PostMapping("/events")
   @ResponseStatus(HttpStatus.CREATED)
   public RouteEventDto createEvent(@PathVariable String code, @Valid @RequestBody MobileEventRequestDto request) {

@@ -44,13 +44,22 @@ class StopDetailScreen extends StatelessWidget {
             children: [
               _customerCard(stop),
               const SizedBox(height: 12),
-              if (stop.delivered) _deliveredBanner() else _actions(context, stop),
+              // Numa rota encerrada o servidor recusa evento novo. Oferecer os botões
+              // aqui seria deixar o motorista registrar uma entrega que vai voltar
+              // recusada — e, offline, só na hora de sincronizar.
+              if (controller.isFinished)
+                _finishedBanner()
+              else if (stop.delivered)
+                _deliveredBanner()
+              else
+                _actions(context, stop),
               const SizedBox(height: 14),
-              const Text(
-                'Sem internet, o registro fica na fila e sobe sozinho quando a conexão voltar.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.gray500, height: 1.5),
-              ),
+              if (!controller.isFinished)
+                const Text(
+                  'Sem internet, o registro fica na fila e sobe sozinho quando a conexão voltar.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.gray500, height: 1.5),
+                ),
             ],
           ),
         );
@@ -96,6 +105,29 @@ class StopDetailScreen extends StatelessWidget {
             child: Text(
               'Entrega registrada. Para corrigir, peça ao gestor para apagar o evento.',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.success700, height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _finishedBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.gray100,
+        border: Border.all(color: AppColors.gray300),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.lock_outline, color: AppColors.gray600),
+          SizedBox(width: 11),
+          Expanded(
+            child: Text(
+              'Rota encerrada. Esta parada ficou como está no histórico; para corrigir, fale com o gestor.',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.gray700, height: 1.4),
             ),
           ),
         ],

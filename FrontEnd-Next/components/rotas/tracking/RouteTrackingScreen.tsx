@@ -88,6 +88,14 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
     [stops]
   );
 
+  /**
+   * Rota encerrada é fechada para registro novo, aqui e no app do motorista — depois dela
+   * o histórico é o que alimenta conferência e relatório. Esconder as ações em vez de
+   * deixá-las falhar: o backend recusa (RouteEventServiceImpl), e um botão que só serve
+   * para produzir erro é pior do que botão nenhum.
+   */
+  const isFinished = route?.status === "concluida";
+
   async function handleCreateEvent(data: RouteEventFormData) {
     try {
       await addEvent({
@@ -194,6 +202,7 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
                     <StopsPanel
                       route={route}
                       deliveredStopIndexes={deliveredStopIndexes}
+                      locked={isFinished}
                       onRegisterDelivery={(stopIndex) => setFormState({ type: "entrega", stopIndex })}
                     />
                   )}
@@ -203,6 +212,7 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
                       isLoading={isLoadingEvents}
                       error={eventsError}
                       stopLabelByIndex={stopLabelByIndex}
+                      locked={isFinished}
                       onCreate={() => setFormState({})}
                       onDelete={setEventToDelete}
                     />

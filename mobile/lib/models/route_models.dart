@@ -5,6 +5,10 @@
 /// poder, montar uma chamada ao CRUD do gestor.
 library;
 
+/// Status de rota encerrada, como o backend o escreve (`RouteStatus.CONCLUIDA`, no Java).
+/// Depois dele o servidor recusa evento novo, então a tela esconde o que registraria.
+const String routeStatusFinished = 'concluida';
+
 class MobileRoute {
   const MobileRoute({
     required this.accessCode,

@@ -11,6 +11,9 @@ public interface IMobileRouteService {
 
   MobileRouteDto findByCode(String accessCode);
 
+  /** Encerra a rota (status {@code concluida}). Idempotente: repetir devolve a rota já fechada. */
+  MobileRouteDto finish(String accessCode);
+
   RouteEventDto createEvent(String accessCode, MobileEventRequestDto request);
 
   List<MobileEventBatchResultDto> createEvents(String accessCode, List<MobileEventRequestDto> requests);

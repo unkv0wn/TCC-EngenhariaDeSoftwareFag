@@ -18,9 +18,27 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// O que o servidor respondeu sobre um lote da fila.
+///
+/// Separa o que entrou do que foi recusado porque os dois saem da fila, por motivos
+/// opostos: o aceito está gravado, o recusado nunca vai ser aceito. O que fica na fila é
+/// só aquilo sobre o que o servidor não se pronunciou.
+class SyncOutcome {
+  const SyncOutcome({required this.accepted, required this.rejected});
+
+  const SyncOutcome.empty() : accepted = const {}, rejected = const {};
+
+  final Set<String> accepted;
+
+  /// `clientEventId` -> motivo da recusa, para poder dizer ao motorista o que caiu.
+  final Map<String, String> rejected;
+
+  Set<String> get settled => {...accepted, ...rejected.keys};
+}
+
 /// Cliente da superfície `/api/mobile/**`.
 ///
-/// Só três chamadas, todas pelo código da rota. O app não conhece id de rota.
+/// Quatro chamadas, todas pelo código da rota. O app não conhece id de rota.
 class ApiClient {
   ApiClient({required this.baseUrl, http.Client? client}) : _client = client ?? http.Client();
 
@@ -41,20 +59,33 @@ class ApiClient {
     return MobileRoute.fromJson(jsonDecode(response) as Map<String, dynamic>);
   }
 
+  /// Encerra a rota. Idempotente no servidor: repetir depois de uma resposta perdida
+  /// devolve a rota já encerrada em vez de erro.
+  Future<MobileRoute> finishRoute(String code) async {
+    final response = await _post('/api/mobile/routes/$code/finish', '');
+    return MobileRoute.fromJson(jsonDecode(response) as Map<String, dynamic>);
+  }
+
   /// Envia a fila inteira de uma vez. O servidor responde item a item: um evento
   /// recusado não derruba os outros, então o retorno diz quais podem sair da fila.
-  Future<Set<String>> syncEvents(String code, List<PendingEvent> events) async {
-    if (events.isEmpty) return <String>{};
+  Future<SyncOutcome> syncEvents(String code, List<PendingEvent> events) async {
+    if (events.isEmpty) return const SyncOutcome.empty();
 
     final body = jsonEncode(events.map((event) => event.toJson()).toList());
     final response = await _post('/api/mobile/routes/$code/events/batch', body);
-    final results = jsonDecode(response) as List<dynamic>;
+    final results = (jsonDecode(response) as List<dynamic>).cast<Map<String, dynamic>>();
 
-    return results
-        .cast<Map<String, dynamic>>()
-        .where((result) => result['accepted'] == true)
-        .map((result) => result['clientEventId'] as String)
-        .toSet();
+    final accepted = <String>{};
+    final rejected = <String, String>{};
+    for (final result in results) {
+      final id = result['clientEventId'] as String;
+      if (result['accepted'] == true) {
+        accepted.add(id);
+      } else {
+        rejected[id] = result['error'] as String? ?? 'Registro recusado pelo servidor.';
+      }
+    }
+    return SyncOutcome(accepted: accepted, rejected: rejected);
   }
 
   Future<String> _get(String path) async {

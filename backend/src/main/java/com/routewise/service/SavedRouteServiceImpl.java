@@ -27,9 +27,9 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
    * no retorno. Permite voltar de em_rota pra planejada (caso o motorista não saia).
    */
   private static final Map<String, List<String>> VALID_STATUS_TRANSITIONS = Map.of(
-    "planejada", List.of("em_rota", "concluida"),
-    "em_rota", List.of("concluida", "planejada"),
-    "concluida", List.of()
+    RouteStatus.PLANEJADA, List.of(RouteStatus.EM_ROTA, RouteStatus.CONCLUIDA),
+    RouteStatus.EM_ROTA, List.of(RouteStatus.CONCLUIDA, RouteStatus.PLANEJADA),
+    RouteStatus.CONCLUIDA, List.of()
   );
 
   private final SavedRouteRepository repository;
@@ -64,7 +64,7 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
     entity.setDriverId(request.driverId());
     entity.setVehicleId(request.vehicleId());
     entity.setDepartureTime(request.departureTime());
-    entity.setStatus("planejada");
+    entity.setStatus(RouteStatus.PLANEJADA);
     entity.setOrdersCount(request.ordersCount());
     entity.setTotalValue(request.totalValue());
     entity.setCompletedStops(0);

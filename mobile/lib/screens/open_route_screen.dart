@@ -29,15 +29,23 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
   @override
   void initState() {
     super.initState();
-    widget.controller.savedCode().then((code) {
-      if (mounted) setState(() => _savedCode = code);
-    });
+    _readSavedCode();
+    // A rota salva muda enquanto esta tela existe: encerrar ou trocar de rota volta para
+    // cá, e aí "continuar de onde parei" apontaria para uma rota que já acabou.
+    widget.controller.addListener(_readSavedCode);
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_readSavedCode);
     _codeField.dispose();
     super.dispose();
+  }
+
+  void _readSavedCode() {
+    widget.controller.savedCode().then((code) {
+      if (mounted && code != _savedCode) setState(() => _savedCode = code);
+    });
   }
 
   Future<void> _scan() async {
@@ -174,6 +182,10 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
                             label: const Text('Continuar de onde parei'),
                           ),
                         ],
+                        if (widget.controller.strandedCount > 0) ...[
+                          const SizedBox(height: 20),
+                          _strandedNote(widget.controller.strandedCount),
+                        ],
                         const SizedBox(height: 24),
                         _hint(),
                       ],
@@ -215,6 +227,39 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
           const Text(
             'App do motorista — abra a rota que o gestor enviou',
             style: TextStyle(color: AppColors.primary200, fontSize: 14, fontWeight: FontWeight.w600, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Aviso de registro preso de uma rota anterior. Aparece aqui, e não só na rota, porque
+  /// é nesta tela que o motorista está quando ainda dá para procurar sinal antes de sair.
+  Widget _strandedNote(int count) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: AppColors.warning50,
+        border: Border.all(color: AppColors.warning200),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.cloud_off_outlined, size: 18, color: AppColors.warning800),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Text(
+              count == 1
+                  ? '1 registro de uma rota anterior ainda não subiu. Ele sobe sozinho na próxima vez que houver conexão.'
+                  : '$count registros de rotas anteriores ainda não subiram. Eles sobem sozinhos na próxima vez que houver conexão.',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.warning800,
+                height: 1.5,
+              ),
+            ),
           ),
         ],
       ),

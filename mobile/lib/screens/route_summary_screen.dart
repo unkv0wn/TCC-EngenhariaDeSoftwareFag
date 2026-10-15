@@ -30,9 +30,20 @@ class RouteSummaryScreen extends StatelessWidget {
           appBar: AppBar(
             title: const Text('Rota do dia'),
             actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Center(child: SyncBadge(pendingCount: controller.pendingCount)),
+              Center(child: SyncBadge(pendingCount: controller.pendingCount)),
+              PopupMenuButton<_RouteAction>(
+                onSelected: (action) => _onAction(context, action),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: _RouteAction.switchRoute,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.qr_code_scanner, size: 20),
+                      title: Text('Abrir outra rota'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -43,7 +54,10 @@ class RouteSummaryScreen extends StatelessWidget {
               children: [
                 _summaryHeader(route),
                 _vehicleAndProgress(route, stops),
-                if (next != null) _nextStopCard(context, next),
+                if (controller.rejection != null) _rejectionBanner(context, controller.rejection!),
+                if (controller.strandedCount > 0) _strandedBanner(controller.strandedCount),
+                if (controller.isFinished) _finishedBanner(),
+                if (next != null && !controller.isFinished) _nextStopCard(context, next),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(16, 18, 16, 8),
                   child: Text(
@@ -57,6 +71,7 @@ class RouteSummaryScreen extends StatelessWidget {
                   ),
                 ),
                 ...stops.map((stop) => _stopTile(context, stop, isNext: stop.number == next?.number)),
+                if (!controller.isFinished) _finishSection(context, stops),
                 const SizedBox(height: 24),
               ],
             ),
@@ -282,6 +297,218 @@ class RouteSummaryScreen extends StatelessWidget {
     );
   }
 
+  /// O fim da rota. Fica depois da lista, e não numa barra fixa, porque encerrar é o
+  /// último toque do dia — ter que rolar até ele é o que impede o toque acidental em cima
+  /// de um botão que o motorista não pode desfazer sozinho.
+  Widget _finishSection(BuildContext context, List<RouteStop> stops) {
+    final remaining = stops.where((stop) => !stop.delivered).length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Divider(),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () => _finish(context, remaining),
+            icon: const Icon(Icons.flag_outlined, size: 18),
+            label: const Text('Encerrar rota'),
+            style: FilledButton.styleFrom(
+              backgroundColor: remaining == 0 ? AppColors.success600 : AppColors.gray600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            remaining == 0
+                ? 'Registra o retorno ao depósito e fecha a rota para o gestor.'
+                : '$remaining ${remaining == 1 ? 'parada' : 'paradas'} sem entrega registrada.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.gray500, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _finishedBanner() {
+    return _banner(
+      icon: Icons.check_circle_outline,
+      color: AppColors.success700,
+      background: AppColors.success50,
+      border: AppColors.success600,
+      text: 'Rota encerrada. Não aceita mais registros — para corrigir algo, fale com o gestor.',
+    );
+  }
+
+  /// Registros de uma rota que não é mais a aberta. Ele é a única pessoa capaz de levar o
+  /// aparelho de volta a um lugar com sinal, então precisa saber que há algo preso aqui.
+  Widget _strandedBanner(int count) {
+    return _banner(
+      icon: Icons.cloud_off_outlined,
+      color: AppColors.warning800,
+      background: AppColors.warning50,
+      border: AppColors.warning200,
+      text: count == 1
+          ? '1 registro de uma rota anterior ainda não subiu. Ele sobe sozinho quando houver conexão.'
+          : '$count registros de rotas anteriores ainda não subiram. Eles sobem sozinhos quando houver conexão.',
+    );
+  }
+
+  /// Recusa definitiva é diferente de falta de rede: o registro saiu da fila e não volta.
+  /// Fica na tela até o motorista dispensar, porque é a única chance de ele saber.
+  Widget _rejectionBanner(BuildContext context, String message) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(13, 11, 7, 11),
+        decoration: BoxDecoration(
+          color: AppColors.danger50,
+          border: Border.all(color: AppColors.danger200),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline, size: 18, color: AppColors.danger700),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.danger700,
+                  height: 1.5,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: controller.dismissRejection,
+              icon: const Icon(Icons.close, size: 18, color: AppColors.danger700),
+              tooltip: 'Dispensar',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _banner({
+    required IconData icon,
+    required Color color,
+    required Color background,
+    required Color border,
+    required String text,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+        decoration: BoxDecoration(
+          color: background,
+          border: Border.all(color: border),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: color, height: 1.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onAction(BuildContext context, _RouteAction action) async {
+    switch (action) {
+      case _RouteAction.switchRoute:
+        await _switchRoute(context);
+    }
+  }
+
+  /// Sair da rota sem encerrá-la — é como se abre a segunda rota do dia quando o código
+  /// novo chegou por telefone, sem link para tocar.
+  Future<void> _switchRoute(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Abrir outra rota'),
+        content: Text(
+          controller.isFinished
+              ? 'Esta rota já está encerrada. Você pode abri-la de novo pelo mesmo código para consultar o histórico.'
+              : 'Esta rota continua em andamento para o gestor e você pode voltar a ela pelo mesmo código. '
+                  'O que você registrou e ainda não subiu continua guardado.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Abrir outra')),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+    await controller.close();
+    if (context.mounted) _leave(context);
+  }
+
+  Future<void> _finish(BuildContext context, int remaining) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Encerrar a rota?'),
+        content: Text(
+          remaining == 0
+              ? 'Registra o retorno ao depósito e fecha a rota. Depois disso não é possível registrar mais nada por aqui.'
+              : 'Ainda há $remaining ${remaining == 1 ? 'parada' : 'paradas'} sem entrega registrada. '
+                  'Encerrando agora, elas ficam assim no histórico e não dá para registrar mais nada por aqui.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: remaining == 0 ? AppColors.success600 : AppColors.danger600,
+            ),
+            child: const Text('Encerrar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final problem = await controller.finish();
+    if (!context.mounted) return;
+
+    if (problem != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(problem), duration: const Duration(seconds: 6)),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Rota encerrada. Bom descanso!')),
+    );
+    _leave(context);
+  }
+
+  /// Volta para a tela de abertura. Quando esta tela foi empilhada sobre ela, basta o pop;
+  /// quando ela é a tela inicial (app aberto já com uma rota salva), quem reage é o
+  /// `ListenableBuilder` da raiz, que vê `route == null` e mostra a abertura.
+  void _leave(BuildContext context) {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) navigator.pop();
+  }
+
   Widget _numberBadge(int number, {required Color background, required Color foreground, required double size}) {
     return Container(
       width: size,
@@ -305,3 +532,7 @@ class RouteSummaryScreen extends StatelessWidget {
     );
   }
 }
+
+/// Ações do menu da rota. Enum de um item só por enquanto, mas é ele que mantém o
+/// `onSelected` honesto quando a segunda ação aparecer.
+enum _RouteAction { switchRoute }
