@@ -80,6 +80,11 @@ project claims rather than lowering it.
 | FR-22 | Lifecycle | The system **shall** enforce exactly these order transitions and reject any other with HTTP 409: `aguardando → faturado \| cancelado`; `faturado → em_rota \| cancelado`; `em_rota → entregue \| faturado` (the return to `faturado` representing goods brought back to the company); `entregue` and `cancelado` are terminal. Once goods are `em_rota` they are no longer cancellable. | US-08 |
 | FR-23 | Invoicing | The system **shall** allow invoicing several pending orders at once, moving them to `faturado`. | US-09 |
 | FR-24 | Eligibility | Only orders in `faturado` **shall** be selectable for route generation. | US-09, US-10 |
+| FR-24a | Lifecycle | A route **shall** record which orders each of its stops delivers, so that a delivery can reach the orders it closed. | US-10, US-19 |
+| FR-24b | Lifecycle | Creating a route **shall** move its orders from `faturado` to `em_rota`, so that the same order cannot be dispatched on a second route while the first is merely planned. | US-10 |
+| FR-24c | Lifecycle | A delivery event **shall** move the orders of **that stop only** to `entregue`. | US-19 |
+| FR-24d | Lifecycle | Concluding or deleting a route **shall** return its still-`em_rota` orders to `faturado`, so that an undelivered order re-enters the pool instead of remaining in a state with no route in progress. | US-13, US-19 |
+| FR-24e | Lifecycle | Propagation **shall** skip any order not in the expected source state rather than failing the request: a delivery registered in the field **shall not** fail because the order changed in the panel meanwhile. Routes saved before FR-24a **shall** be skipped silently. | US-19, US-20 |
 
 ### 2.4 Route dispatch and tracking
 
@@ -99,7 +104,12 @@ project claims rather than lowering it.
 
 | ID | Category | Requirement | Source Story |
 |----|----------|-------------|--------------|
-| FR-34 | Access | The app **shall** open a route by token at `GET /api/mobile/routes/{token}`, with no account and no password. | US-16 |
+| FR-34 | Access | The app **shall** open a route by code at `GET /api/mobile/routes/{code}`, carrying the driver session obtained at login. The code selects which route; it is not the credential. | US-16 |
+| FR-34a | Authentication | The app **shall** authenticate at `POST /api/mobile/auth/login` with username, password and the device identifier, and **shall** receive a session token used on every subsequent call. | US-16 |
+| FR-34b | Device binding | Login **shall** be refused unless the device identifier matches the one the manager registered for that account. An account with no registered device **shall** be refused from every device. | US-16 |
+| FR-34c | Device identity | The device identifier **shall** be `Settings.Secure.ANDROID_ID`, **not** the IMEI: since Android 10 the IMEI requires a privileged permission unavailable to third-party applications, and Play policy forbids using it as a persistent identifier. The app **shall** display the identifier on its login screen, because the operating system exposes it on no screen of its own and the manager cannot otherwise obtain it. | US-16 |
+| FR-34d | Refusal detail | Wrong credentials **shall** return HTTP 401 with one message that does not distinguish an unknown username from a wrong password; a correct credential refused for device or account status **shall** return HTTP 403 with a message directing the driver to the manager. | US-16 |
+| FR-34e | Access management | The manager **shall** be able to create, block, unblock and delete app accounts and to register or release the device bound to each, at `/api/mobile-users`. | US-16 |
 | FR-35 | Isolation | The mobile surface **shall** expose exactly one route and **shall not** return internal identifiers of the route, driver or vehicle. | US-16 |
 | FR-36 | Isolation | An unknown token **shall** return HTTP 404, never 403, so that a response cannot confirm a token's existence. | US-16 |
 | FR-37 | Authorship | The server **shall** set the author of a mobile event to the route's assigned driver; the app **shall not** be able to choose it. | US-19 |
@@ -150,7 +160,10 @@ project claims rather than lowering it.
 | NFR-12 | The route access token **shall** be generated with `SecureRandom` and **shall** be treated as a bearer secret: it grants access to one route and is not authentication. |
 | NFR-13 | External service URLs **shall** be configurable and never hardcoded. |
 | NFR-14 | CORS origins **shall** be explicit. |
-| NFR-15 | **Open gap:** no endpoint requires authentication. There is no user table, no Spring Security dependency and no JWT filter; the login flow protects pages in the Next.js layer only. A production deployment would have to close this before exposure. |
+| NFR-15 | **Open gap:** the manager API requires no authentication. `/api/auth/login` issues a token for any e-mail without checking a password, there is no manager user table, and every endpoint outside `/api/mobile/**` is reachable unauthenticated — including `/api/mobile-users`, which grants app access. The login flow protects pages in the Next.js layer only. A production deployment would have to close this before exposure. |
+| NFR-27 | The driver surface `/api/mobile/**` **shall** require an authenticated driver session, enforced by a servlet filter outside Spring Security (only `spring-security-crypto` is present, for BCrypt). Driver tokens **shall** be distinguishable from manager tokens so that one cannot be presented as the other. |
+| NFR-28 | Driver passwords **shall** be stored only as BCrypt hashes, and **shall not** appear in any response or log. |
+| NFR-29 | **Open gap:** login attempts against the driver surface are not retained. Only the last successful login is stored (`mobile_users.last_login_at`); refusals reach the application log only, so a refused device leaves no trace the manager can read. |
 | NFR-16 | **Open gap:** the JWT signing secret is committed in `application.properties` and duplicated in `docker-compose.yml`. |
 
 ### 3.4 Code quality
@@ -204,17 +217,17 @@ project claims rather than lowering it.
 | US-07 Create order | FR-21 | NFR-11 |
 | US-08 Order lifecycle | FR-22 | NFR-11, NFR-23 |
 | US-09 Invoice batch | FR-23, FR-24 | NFR-23 |
-| US-10 Generate route | FR-09 … FR-15, FR-17, FR-25, FR-26 | NFR-01, NFR-02, NFR-03, NFR-06 |
+| US-10 Generate route | FR-09 … FR-15, FR-17, FR-25, FR-26, FR-24a, FR-24b | NFR-01, NFR-02, NFR-03, NFR-06 |
 | US-11 See route on map | FR-16, FR-18, FR-38 | NFR-05, NFR-06 |
 | US-12 Live progress | FR-19 | NFR-04, NFR-07 |
-| US-13 Save and dispatch | FR-27, FR-28 | NFR-05, NFR-21 |
+| US-13 Save and dispatch | FR-27, FR-28, FR-24d | NFR-05, NFR-21 |
 | US-14 Share with driver | FR-29 | NFR-12 |
 | US-15 Track route | FR-30 … FR-33 | NFR-23 |
-| US-16 Open by token | FR-34, FR-35, FR-36 | NFR-12, NFR-15 |
+| US-16 Sign in and open route | FR-34, FR-34a … FR-34e, FR-35, FR-36 | NFR-12, NFR-15, NFR-27, NFR-28, NFR-29 |
 | US-17 Ordered stops | FR-38 | NFR-05 |
 | US-18 Navigate | FR-39 | — |
-| US-19 Register events | FR-30, FR-31, FR-37 | NFR-11 |
-| US-20 Work offline | FR-40, FR-41, FR-42 | NFR-08, NFR-09, NFR-10 |
+| US-19 Register events | FR-30, FR-31, FR-37, FR-24a, FR-24c, FR-24d, FR-24e | NFR-11 |
+| US-20 Work offline | FR-40, FR-41, FR-42, FR-24e | NFR-08, NFR-09, NFR-10 |
 
 ---
 

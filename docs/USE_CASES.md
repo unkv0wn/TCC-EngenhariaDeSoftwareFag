@@ -197,8 +197,9 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 
 **Main Flow:**
 1. With a computed route on screen, the manager confirms driver, vehicle and departure time.
-2. On "Salvar rota", the frontend posts the route with its algorithm snapshot and labelled stops.
-3. The backend persists it in status `planejada`, denormalises the totals and generates an access token.
+2. On "Salvar rota", the frontend posts the route with its algorithm snapshot and labelled stops — each stop carrying the orders it delivers.
+3. The backend persists it in status `planejada`, denormalises the totals and generates an access code.
+3a. The backend moves the route's orders from `faturado` to `em_rota`. This happens at creation, not at departure: the generation screen offers exactly the `faturado` orders, so leaving them there would let the same order be dispatched on a second route.
 4. The route appears in `/dashboard/rotas`, where its card shows driver, vehicle and load capacity.
 5. The manager uses "Enviar" to share the route with the driver over WhatsApp.
 
@@ -209,7 +210,9 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 | 5a | The driver has no phone registered | The share button is disabled with an explanatory tooltip. |
 
 **Post-conditions:**
-- The route is persisted, dispatched, and reachable by the driver through its token.
+- The route is persisted, dispatched, and reachable by the driver through its code.
+- Its orders read `em_rota` and no longer appear as eligible for another route.
+- Concluding or deleting the route later returns any still-`em_rota` order to `faturado`.
 
 ---
 
@@ -247,24 +250,33 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 **Source Stories:** US-16, US-17
 
 **Pre-conditions:**
+- The manager created an app account for the driver and registered this phone's identifier on it.
 - The driver received the link, or the route's code.
 
 **Main Flow:**
-1. The driver opens the app and pastes the code (or follows the link, once deep linking is implemented).
-2. The app requests `GET /api/mobile/routes/{token}`.
-3. The backend returns the route, the stops already matched to customers and numbered, and the events so far — with no internal identifiers.
-4. The app shows the day's route: departure, vehicle with capacity, progress, next stop highlighted and the full stop list.
-5. The token is stored, so the next launch opens the route directly.
+1. The driver opens the app and signs in with username and password; the app sends this phone's identifier along with them.
+2. The backend checks the password (BCrypt) and that the identifier is the one registered for the account, and returns a session token. The app stores the session, so later launches skip this step.
+3. The driver scans the QR code, follows the link, or types the code.
+4. The app requests `GET /api/mobile/routes/{code}`, carrying the session.
+5. The backend returns the route, the stops already matched to customers and numbered, and the events so far — with no internal identifiers.
+6. The app shows the day's route: departure, vehicle with capacity, progress, next stop highlighted and the full stop list.
+7. The code is stored, so the next launch opens the route directly.
 
 **Alternative Flows:**
 
 | Code | Trigger | System Response |
 |------|---------|-----------------|
-| 2a | Unknown or revoked token | HTTP 404 and a message asking for a new link; the stored token is cleared. |
-| 2b | No connectivity, with a route previously loaded | The app keeps showing the loaded route rather than an empty screen. |
+| 1a | Wrong username or password | HTTP 401 and one message that does not say which of the two was wrong. |
+| 1b | Correct credentials, phone not the registered one | HTTP 403 telling the driver to contact the manager; the app shows this phone's identifier, with a copy button, so he can send it. |
+| 1c | Account has no registered device yet | HTTP 403 with the same instruction — no phone can sign in to that account until the manager registers one. |
+| 1d | Account blocked by the manager | HTTP 403 saying the access is blocked. |
+| 4a | Unknown or revoked code | HTTP 404 and a message asking for a new link; the stored code is cleared. |
+| 4b | No connectivity, with a route previously loaded | The app keeps showing the loaded route rather than an empty screen. |
+| 4c | Session expired or revoked mid-day | HTTP 401; the app returns to the login screen. The offline queue is **not** cleared — unsent field records survive the sign-out. |
 
 **Post-conditions:**
 - The driver sees exactly one route — his own.
+- The account's last login is recorded.
 
 ---
 
@@ -281,7 +293,8 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 4. After handing over the goods, the driver taps "Entreguei" and confirms.
 5. The app generates an event identifier, writes the event to its local queue and updates the screen immediately.
 6. The app posts the queue; the backend stores the event, setting the author to the route's driver.
-7. The stop turns green, the progress advances and the next stop is highlighted.
+7. The backend moves the orders of **that stop** from `em_rota` to `entregue` — the delivery is what closes the order.
+8. The stop turns green, the progress advances and the next stop is highlighted.
 
 **Alternative Flows:**
 
@@ -292,9 +305,12 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 | 6a | Connectivity returns | The queue is sent as a batch; each item is answered individually and only the confirmed ones leave the queue. |
 | 6b | A request is retried after an unacknowledged response | The repeated event identifier makes the backend return the stored event — the delivery is not counted twice. |
 | 6c | One item in the batch is invalid | It is reported as rejected with its reason; the others are stored. |
+| 7a | An order of that stop is no longer `em_rota` (cancelled in the panel, already delivered by an earlier event) | It is skipped and logged; the delivery itself is still recorded. A field registration never fails because of a status side-effect. |
+| 7b | The route was saved before stops recorded their orders | No order is closed; the event is recorded normally. The link was never stored and cannot be recovered. |
 
 **Post-conditions:**
 - The event is recorded once, attributed to the driver, and visible on the manager's tracking screen.
+- The orders of that stop read `entregue`, with the transition in their own status history.
 
 ---
 

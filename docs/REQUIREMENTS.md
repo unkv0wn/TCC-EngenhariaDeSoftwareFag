@@ -28,7 +28,7 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 | Actor | Where | Authenticated |
 |-------|-------|---------------|
 | **Manager** (gestor) | `FrontEnd-Next/` web dashboard | Login screen exists; not enforced by the backend — see "Known gaps" |
-| **Driver** (motorista) | `mobile/` Android app | No account: opens one route via a per-route token |
+| **Driver** (motorista) | `mobile/` Android app | Yes: username + password (BCrypt) and the phone must be the one the manager enrolled. The route itself is then opened by a per-route code |
 
 ---
 
@@ -68,7 +68,7 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 | ID    | As a…    | I want to…                                                      | So that…                                                        |
 |-------|----------|-----------------------------------------------------------------|-----------------------------------------------------------------|
 | US-15 | Manager  | Follow a route in progress: stops, events and documents          | I know what has been delivered and what went wrong               |
-| US-16 | Driver   | Open the day's route from the link I received                    | I start working without an account or a password                 |
+| US-16 | Driver   | Sign in on my own phone and open the day's route from the link I received | Only I, on the phone the company registered, can register work in my name |
 | US-17 | Driver   | See my stops in order and which one is next                      | I do not have to decide the sequence myself                      |
 | US-18 | Driver   | Be guided to the next stop                                       | I use the navigation app I already know                          |
 | US-19 | Driver   | Register arrival, delivery and incidents where they happen       | The office sees what happened without me phoning in              |
@@ -93,7 +93,7 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 | Map tiles                  | OpenStreetMap (free, no API key)                                            |
 | Map library (web)          | react-leaflet + leaflet.js                                                  |
 | Third-party lookups        | ViaCEP (CEP), BrasilAPI (CNPJ, CEP v2), FIPE (vehicle models), Nominatim (geocoding) — all free and key-less |
-| Driver authentication      | None — per-route token in the shared link                                   |
+| Driver authentication      | Username + BCrypt password + enrolled device (`ANDROID_ID`, not IMEI); enforced on `/api/mobile/**` by a servlet filter. The per-route code selects *which* route, it is not the credential |
 | Manager authentication     | Login screen + JWT cookie; **not enforced by the backend** (known gap)      |
 | Osm graph (`osm4j`)        | Present but **disabled by default**; feeds only `GET /api/routes/graph-stats` |
 
@@ -116,19 +116,34 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 - [x] Orders sharing an address collapse into one route stop
 - [x] Routes persist with their algorithm snapshot and can be listed and reopened
 - [x] A tracking screen shows stops, the event log and (mocked) documents
+- [x] Selecting a stop highlights it on the map, and clicking a marker highlights it in the list
+
+### Order lifecycle
+- [x] A route records which orders each stop delivers
+- [x] Creating a route moves its orders out of `faturado`, so none can be dispatched twice
+- [x] A delivery in the field closes the orders of that stop, and only of that stop
+- [x] Concluding or deleting a route returns undelivered orders to the pool
+- [x] The automatic transitions appear in the order's own status history
 
 ### Driver app
-- [x] Route opens by token, with no account
+- [x] Sign-in with username, password and a device the manager registered
+- [x] The login screen shows this phone's identifier, so the manager can register it
+- [x] An unregistered phone cannot sign in, even with the right password
+- [x] `/api/mobile/**` refuses calls without a driver session
 - [x] Stops are numbered identically to the manager's map
 - [x] Arrival, delivery and incident are registered from the stop screen
 - [x] Events survive being registered with no connectivity and sync afterwards
 - [x] A retried event cannot register a second delivery
+- [x] Signing out keeps the offline queue — unsent field records are not lost
+- [ ] Route map screen — **not done**
 
 ### Quality
 - [x] No business logic in the frontends — both consume the same API
 - [x] Backend response under 5 s for the practical waypoint ceiling
-- [ ] Automated tests for controllers, services and repositories — **not done**
-- [ ] Backend authentication enforced — **not done** (see below)
+- [x] Automated tests for the order lifecycle (stop↔order matching and propagation)
+- [ ] Automated tests for controllers and repositories — **not done**
+- [ ] Manager authentication enforced — **not done** (see below)
+- [ ] A screen showing app login attempts — **not done** (see below)
 
 ---
 
@@ -136,14 +151,25 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 
 These are stated here rather than hidden, because they bound what the system can claim.
 
-1. **Authentication is navigational only.** The backend issues a JWT for any e-mail and
-   validates none; `/api/**` is reachable unauthenticated. The guard lives in the Next.js
-   middleware and protects pages, not data.
-2. **The route token is a bearer secret**, not authentication: whoever holds the link
-   holds that route. It exposes one route, never the system.
-3. **Document attachment is mocked** on both the web tracking screen and the app. Real
-   upload needs decisions on storage, size limits and retention that have not been made.
-4. **No vehicle telemetry.** Progress comes from events the driver registers, never from
+1. **Manager authentication is navigational only.** The backend issues a JWT for any
+   e-mail and validates no password; every endpoint outside `/api/mobile/**` is reachable
+   unauthenticated. The guard lives in the Next.js proxy and protects pages, not data.
+   The driver surface is the exception — it is genuinely enforced.
+2. **That asymmetry has a sharp edge.** `/api/mobile-users`, which grants app access, sits
+   on the unauthenticated side. Whoever reaches port 8080 can create an account and
+   register their own phone, so the device binding holds only as far as the network does.
+3. **The route code is a bearer secret**, not authentication: whoever holds the link can
+   select that route — but since the driver surface requires a session, holding the code
+   alone no longer reaches the data.
+4. **Login attempts are not retained.** Only the last successful login is stored; refusals
+   reach the application log only. A refused device — the event the binding exists to
+   prevent — leaves no trace the manager can read.
+5. **Document attachment is mocked** on both the web tracking screen and the app. Real
+   upload needs decisions on storage, size limits and retention that have not been made;
+   deferred by choice, not pending work.
+6. **No vehicle telemetry.** Progress comes from events the driver registers, never from
    GPS — the system never claims to know where the truck is.
-5. **No automated coverage of the CRUD layer.** Only the mathematical core and the
-   mobile wire contract are tested.
+7. **Thin automated coverage.** The mathematical core, the mobile wire contract and the
+   order lifecycle are tested; controllers and repositories are not.
+8. **The order↔stop link is not retroactive.** Routes saved before stops recorded their
+   orders cannot close an order: the link was never stored and cannot be reconstructed.

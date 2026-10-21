@@ -10,7 +10,7 @@ The repo contains **four independently-developed pieces** — know which one you
 
 - `backend/` — Java 21 + Spring Boot 3.2.5. The functional core plus the CRUD API. Persists to PostgreSQL (Spring Data JPA + Flyway). The route-computation pipeline (`RouteController` → `RouteOptimizerServiceImpl`) is still stateless; everything else (cadastros, orders, saved routes, settings) is database-backed.
 - `FrontEnd-Next/` — Next.js 16 + React 19 + Tailwind 4. **This is the production frontend** — everything shipped ends up here. It **is wired to the backend**: `lib/apiClient.ts` + `services/*.ts` call the real REST API, and the per-page hooks (`useVehicles`, `useOrders`, …) own loading/error state. It also calls four third-party public APIs directly from the browser (ViaCEP, BrasilAPI, FIPE via BrasilAPI, Nominatim) — those are unrelated to the RouteWise backend.
-- `mobile/` — Flutter (Dart 3.5+), Android first. The driver's field app: opens one route by access code (QR, `routewise://rota/<code>` deep link or typed), registers arrival/delivery/incident, queues events while offline, and closes the route at the end of the day so the next one can be opened. Consumes `/api/mobile/**` only — never the manager's CRUD. Nothing is shared with `FrontEnd-Next/` except the API contract and the palette (`theme/app_theme.dart` mirrors `globals.css`; changing the brand means changing both). Design: `docs/superpowers/specs/2026-10-05-driver-mobile-app-design.md`.
+- `mobile/` — Flutter (Dart 3.5+), Android first. The driver's field app: signs in with a username, password and the phone's enrolled identifier, then opens one route by access code (QR, `routewise://rota/<code>` deep link or typed), registers arrival/delivery/incident, queues events while offline, and closes the route at the end of the day so the next one can be opened. Consumes `/api/mobile/**` only — never the manager's CRUD. Nothing is shared with `FrontEnd-Next/` except the API contract and the palette (`theme/app_theme.dart` mirrors `globals.css`; changing the brand means changing both). Design: `docs/superpowers/specs/2026-10-05-driver-mobile-app-design.md`.
 - `frontend/` — React 18 + Vite + Leaflet. A test-only prototype that validated the routing core end-to-end. **Does not ship.** Treat as frozen/reference; don't build new features here.
 
 ## Commands
@@ -21,11 +21,13 @@ The repo contains **four independently-developed pieces** — know which one you
 docker compose -f backend/docker-compose.yml up -d   # start local Postgres (:5434), needed before the two below
 mvn clean install                 # compile + run all tests
 mvn spring-boot:run               # run on :8080
-mvn test                          # run tests only
+mvn test                          # run tests only — NOT read-only, see below
 mvn test -Dtest=AStarWaypointOptimizerTest        # single test class
 mvn test -Dtest=AStarWaypointOptimizerTest#methodName  # single test method
 mvn package                       # build jar -> target/routewise-backend-*.jar
 ```
+
+**`mvn test` rewrites committed files.** `AStarTieBreakBenchmarkTest` regenerates `docs/refactor-math-result/comparacao-tempos.md` and `comparacao_15.md` with the timings measured on whatever machine just ran it, timestamp included. Those files are TCC measurement artifacts, so after running the suite check `git status docs/` and revert that churn unless you actually meant to re-record the benchmark.
 
 Standalone validation/experiment scripts under `com.routewise.validation` (not part of the request pipeline) are run individually, e.g.:
 ```bash
@@ -89,7 +91,9 @@ All under `/api`. Every CRUD controller follows the same shape — `GET` (list),
 | `/api/routes` | `SavedRouteController` | `GET`, `GET /{id}`, `POST`, `PATCH /{id}/status`, `DELETE /{id}` |
 | `/api/routes/compute`, `/api/routes/events/{requestId}`, `/api/routes/graph-stats` | `RouteController` | the computation pipeline |
 | `/api/routes/{routeId}/events` | `RouteEventController` | `GET`, `POST`, `DELETE /{id}` — the tracking log |
-| `/api/mobile/routes/{code}` | `MobileRouteController` | `GET`, `POST /finish`, `POST /events`, `POST /events/batch` — the driver app, by access code |
+| `/api/mobile/auth/login` | `MobileAuthController` | `POST` only — the driver app's real login (password + enrolled device). The one path under `/api/mobile/**` that needs no token |
+| `/api/mobile/routes/{code}` | `MobileRouteController` | `GET`, `POST /finish`, `POST /events`, `POST /events/batch` — the driver app, by access code. **Requires a driver session** (see "Authentication") |
+| `/api/mobile-users` | `MobileUserController` | plain CRUD — the manager grants/revokes app access. Note the hyphen: this is *not* under `/api/mobile/`, so the driver-session filter does not apply |
 | `/api/settings` | `CompanySettingsController` | `GET` + `PUT`, single row |
 
 `RouteController`, `SavedRouteController` and `RouteEventController` **share the `/api/routes` base path**. They don't collide: the computation endpoints are fixed sub-paths (`/compute`, `/events/{requestId}`, `/graph-stats`), the saved-route ones are the root and `/{id}`, and the event log is `/{routeId}/events`. Note the near-miss — `/events/{requestId}` wants the literal in the *first* segment, `/{routeId}/events` in the *second*. Inverting either breaks routing with no compile error.
@@ -104,10 +108,23 @@ Errors come back as RFC 9457 problem details from `GlobalExceptionHandler`; the 
 
 ### Authentication (read this before touching login)
 
+There are **two unrelated auth stories here**, and only the second one actually works. Don't carry conclusions from one to the other.
+
+#### Driver app (`/api/mobile/**`) — real, and enforced
+
+- `MobileAuthController.login` → `MobileUserServiceImpl.authenticate` checks a **BCrypt** password against the `mobile_users` table and refuses unless the request's `deviceId` matches the one the manager enrolled.
+- `MobileAuthFilter` (a plain servlet filter, registered for `/api/mobile/*` only by `MobileAuthFilterConfig`) rejects every other mobile request without a valid driver token — 401, written as a problem detail by hand, because a filter runs before `GlobalExceptionHandler` can see it.
+- Tokens carry `typ: "mobile"`; `JwtService.parseMobileSession` refuses anything else, so a panel token (issued for any e-mail, no password) cannot pass as a driver session even though both are signed with the same secret.
+- `deviceId` is `Settings.Secure.ANDROID_ID`, read by a MethodChannel in `MainActivity.kt`. **It is deliberately not the IMEI**: since Android 10 the IMEI needs `READ_PRIVILEGED_PHONE_STATE`, unavailable to third-party apps at any API level, and Play policy forbids using it as a persistent id. The app shows the identifier on its login screen so the driver can send it to the manager, who registers it under Cadastros → Frota → Acessos do App. A `mobile_users` row with `device_id` NULL logs in from **no** phone at all.
+- What this does *not* do: tie a route to its driver. The route is still opened by access code; the token proves "an enrolled driver on an enrolled phone", not "the driver assigned to this route".
+- Spring Security is **not** in play — only `spring-security-crypto`, for BCrypt. Adding the starter would lock down all of `/api/**`, which the panel below cannot survive.
+
+#### Manager panel (`/api/auth/login`) — still navigational only
+
 Auth exists but is **not enforced anywhere on the backend**:
 
-- `AuthController.login` issues a JWT for **any** email it receives — it never checks a password, and there is no user table.
-- `JwtService` only *generates* tokens. There is no filter, no `spring-boot-starter-security` dependency and no `@PreAuthorize` — every `/api/**` endpoint is reachable unauthenticated.
+- `AuthController.login` issues a JWT for **any** email it receives — it never checks a password, and there is no manager user table (`mobile_users` is the driver app's, not the panel's).
+- There is no filter on the panel's paths, no `spring-boot-starter-security` dependency and no `@PreAuthorize` — every `/api/**` endpoint **except `/api/mobile/**`** is reachable unauthenticated, `/api/mobile-users` (which grants app access) included.
 - The real credential check lives in the frontend: `FrontEnd-Next/app/api/login/route.ts` compares against a hardcoded `DataMock` pair, then asks the backend for a token and stores it in an `httpOnly` cookie named `routewise`.
 - `FrontEnd-Next/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`) guards `matcher: ["/dashboard/:path*"]`, verifying the cookie's signature and expiry with `jose` against `JWT_SECRET`.
 - `lib/apiClient.ts` sends **no** `Authorization` header and no credentials — the token never reaches the backend, which wouldn't check it anyway.
@@ -148,13 +165,32 @@ Two distinct degradation paths, both deliberate:
 
 PostgreSQL via Spring Data JPA + Flyway. `backend/docker-compose.yml` runs Postgres 16 on host port **5434** (dev credentials `routewise`/`routewise`, db `routewise`). Connection settings read `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`, defaulting to that compose setup.
 
-Flyway owns the schema — `backend/src/main/resources/db/migration/`, currently `V1__init.sql` (empty baseline) through `V14__create_company_settings.sql`. `spring.jpa.hibernate.ddl-auto=validate`: Hibernate checks entities against the schema but never generates DDL. **Every schema change goes through a new migration file** — never edit an applied one.
+Flyway owns the schema — `backend/src/main/resources/db/migration/`, currently `V1__init.sql` (empty baseline) through `V18__create_mobile_users.sql`. `spring.jpa.hibernate.ddl-auto=validate`: Hibernate checks entities against the schema but never generates DDL. **Every schema change goes through a new migration file** — never edit an applied one.
 
-13 entities / 11 repositories exist today: `Vehicle`, `Driver`, `Unit`, `Product`, `Customer`, `Refueling`, `PaymentMethod`, `PaymentCondition`, `Order` (+ `OrderItem`, `OrderHistoryEntry`), `SavedRoute`, `CompanySettings`. Services are `I<Name>Service` + `<Name>ServiceImpl`, all annotated `@Transactional` at class level with `@Transactional(readOnly = true)` on reads.
+14 entities / 12 repositories exist today: `Vehicle`, `Driver`, `Unit`, `Product`, `Customer`, `Refueling`, `PaymentMethod`, `PaymentCondition`, `Order` (+ `OrderItem`, `OrderHistoryEntry`), `SavedRoute`, `CompanySettings`, `MobileUser`. Services are `I<Name>Service` + `<Name>ServiceImpl`, all annotated `@Transactional` at class level with `@Transactional(readOnly = true)` on reads.
 
 Referential deletes are guarded in the service layer, not by FK cascade: deleting a Unit in use by a Product, or a Vehicle/Driver with refuelings, is blocked.
 
 `Order.status` and `SavedRoute.status` are plain `String`s, and the valid-transition maps are **duplicated**: `VALID_STATUS_TRANSITIONS` in `OrderServiceImpl` mirrors the same constant in `hooks/useOrders.ts`. Change one, change the other. Illegal transitions raise `InvalidOrderStatusTransitionException` / `InvalidRouteStatusTransitionException`.
+
+### Order ↔ route lifecycle (`RouteOrderLifecycle`)
+
+An order's status is **not** only moved by hand from the orders screen — the route moves it too. `RouteOrderLifecycle` is the single place that does this, hooked in four spots:
+
+| When | Transition | Hooked in |
+|------|-----------|-----------|
+| Route created | `faturado` → `em_rota` | `SavedRouteServiceImpl.create` |
+| `entrega` event on a stop | `em_rota` → `entregue` (that stop's orders only) | `RouteEventServiceImpl.create` |
+| Route → `concluida` | `em_rota` → `faturado` ("Retorno à empresa") | `SavedRouteServiceImpl.changeStatus` |
+| Route deleted | `em_rota` → `faturado` | `SavedRouteServiceImpl.delete` |
+
+Four things to know before touching it:
+
+- **The link lives in the stops JSON.** `LabeledStop.orderIds` (written by `lib/routeStops.ts`, read by `RouteStopResolver.orderIdsByStop`) is what connects a stop to the orders it delivers. `SavedRoute` itself stores only `ordersCount`. Routes saved before this field existed have no link and are silently skipped — the data was never recorded and cannot be recovered.
+- **Stop → order is matched by coordinate, not by array position.** `stops` is in the manager's selection order; `orderedWaypoints` is in the A*'s order. They differ by definition. `RouteStopResolverTest` pins this, because getting it wrong closes the wrong customer's order with nothing visible on any screen.
+- **Nothing in it throws on business grounds.** An order not in the expected source state is skipped and logged. A delivery registered in the field must never fail because someone cancelled the order in the panel — the event is the primary fact, the order status is derived from it.
+- **Orders leave `faturado` at route *creation*, not when the route goes `em_rota`.** `GerarRotaScreen` offers exactly the `faturado` orders, so leaving them there while a route is merely `planejada` would let the same order be dispatched on two routes. The cost is an order reading `em_rota` a few hours before the truck leaves; the route's own status disambiguates it, and double dispatch would have no undo.
+- Hooking the event service covers **both** apps: `MobileRouteServiceImpl.createEvent(s)` delegates to `routeEventService.create`, and `MobileRouteServiceImpl.finish` delegates to `savedRouteService.changeStatus`.
 
 ### FrontEnd-Next data flow
 
@@ -174,9 +210,9 @@ Form validation is Zod schemas under `lib/validations/`, one file per resource; 
 
 ## Testing
 
-Backend has 10 JUnit 5 classes, **all** under `algorithm/` and `validation/` — the A* optimizer, its tie-break benchmark, Haversine, and the empirical cost calculators. There are **no tests for any controller, service or repository**, and no `@SpringBootTest` context test (which would need a running Postgres or Testcontainers — not wired in). `FrontEnd-Next/` has no tests and no runner. The only frontend tests (`useWaypoints`, `useSseListener`, Vitest) live in the frozen `frontend/` prototype.
+Backend has 12 JUnit 5 classes / 63 tests. Ten are under `algorithm/` and `validation/` — the A* optimizer, its tie-break benchmark, Haversine, and the empirical cost calculators. Two are under `service/` and cover the order↔route lifecycle: `RouteStopResolverTest` (pure, no mocks — pins stop↔order matching by coordinate) and `RouteOrderLifecycleTest` (Mockito — pins **which orders must not move**). Those two are the only service-level tests; there are still **no tests for any controller or repository**, and no `@SpringBootTest` context test (which would need a running Postgres or Testcontainers — not wired in). `FrontEnd-Next/` has no tests and no runner. The only frontend tests (`useWaypoints`, `useSseListener`, Vitest) live in the frozen `frontend/` prototype.
 
-`mobile/` has `test/route_models_test.dart`, covering the wire contract with `/api/mobile/**`: event serialisation, the exact `type` strings the backend validates, and route parsing. That contract is the thing that breaks silently — a field renamed in Java still compiles on the Dart side and only surfaces as a rejected event, in the field. `test/access_code_test.dart` fixes what the app accepts as a code (QR, deep link, typed), and `test/event_queue_test.dart` pins the offline queue being **per route**: a single shared queue used to push the previous route's pending delivery into the newly opened one.
+`mobile/` has `test/route_models_test.dart`, covering the wire contract with `/api/mobile/**`: event serialisation, the exact `type` strings the backend validates, and route parsing. That contract is the thing that breaks silently — a field renamed in Java still compiles on the Dart side and only surfaces as a rejected event, in the field. `test/access_code_test.dart` fixes what the app accepts as a code (QR, deep link, typed), and `test/event_queue_test.dart` pins the offline queue being **per route**: a single shared queue used to push the previous route's pending delivery into the newly opened one. `test/mobile_login_test.dart` covers the login contract (the field names `MobileLoginRequestDto` reads, and 401-vs-403 meaning different things to the driver) plus the `Authorization` header actually going out on route calls — if it stops, every mobile endpoint fails at once, in the field.
 
 Keep this in mind when changing CRUD or status-transition logic: nothing will catch a regression for you.
 
@@ -214,7 +250,7 @@ Raw Tailwind utility classes composed with a `cn()` helper (clsx/tailwind-merge)
 
 There is **no `Select` primitive** — searchable dropdowns use `SearchableSelect`, and simple filters use a styled native `<select>` inside the feature folder (`OrderStatusFilter`, `RouteStatusFilter`, `VehicleFilterSelect`, `CustomerTypeFilter`).
 
-Every cadastro page (`VehiclesPageContent`, `DriversPageContent`, `ProductsPageContent`, `UnitsPageContent`, `CustomersPageContent`, `RefuelingsPageContent`, `PaymentMethodsPageContent`, `PaymentConditionsPageContent`, `OrdersPageContent`) is built from these — extend them rather than reintroducing a one-off overlay/header/search/empty-state per screen. The recurring shape is `<Feature>PageContent` + `<Feature>FormModal` + `<Feature>Table` (+ `<Feature>Card`/`<Feature>Grid` where a card view exists).
+Every cadastro page (`VehiclesPageContent`, `DriversPageContent`, `ProductsPageContent`, `UnitsPageContent`, `CustomersPageContent`, `RefuelingsPageContent`, `PaymentMethodsPageContent`, `PaymentConditionsPageContent`, `OrdersPageContent`, `MobileUsersPageContent`) is built from these — extend them rather than reintroducing a one-off overlay/header/search/empty-state per screen. The recurring shape is `<Feature>PageContent` + `<Feature>FormModal` + `<Feature>Table` (+ `<Feature>Card`/`<Feature>Grid` where a card view exists).
 
 - **Buttons** (`Button.tsx`): 3 variants — `primary` (`bg-primary-600 text-white hover:bg-primary-700`), `secondary` (`bg-white border border-gray-200 hover:bg-gray-50`), `ghost` (`bg-transparent hover:bg-gray-100`). Shared base: `rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-150 ease-out`, focus via `focus-visible:ring-2 focus-visible:ring-primary-500`. No formal "danger" variant — produced ad hoc by overriding classes (see `ConfirmDialog.tsx`). Icon-only buttons: `rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600`.
 - **Cards**: `rounded-xl border border-gray-200 bg-white`, no shadow by default (`hover:shadow-md` only on hover, e.g. `VehicleCard.tsx`).
@@ -239,5 +275,5 @@ Everything lives under `docs/` — there is no `REQUIREMENTS.md` at the repo roo
 - `docs/superpowers/specs/` — design specs per feature (dashboard, toast, vehicle/unit/product/customer/driver/refueling cadastros, empirical cost experiments).
 - `docs/superpowers/plans/` — implementation plans derived from those specs, broken into verifiable phases.
 - `docs/validation-reports/` — generated output of the `com.routewise.validation` experiments (Markdown + GeoJSON).
-- `TODO.md` — module roadmap (cadastros → orders → invoicing → routes) and the decisions already taken.
+- `TODO.md` — roadmap and the decisions already taken, including which planned modules were deliberately collapsed (invoicing became the order's `faturado` status; dispatch became fields on the route).
 - `README-DOCKER.md` — running the whole stack with Docker.

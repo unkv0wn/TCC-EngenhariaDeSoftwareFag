@@ -1,180 +1,274 @@
 # RouteWise — Estado atual do projeto
 
-Inventário do que existe hoje no backend e nos dois frontends. Gerado a partir do código-fonte,
-não é um documento de planejamento — reflete o que está implementado, mockado ou pendente neste momento.
+Inventário do que existe hoje nas quatro peças do repositório. Levantado a partir do código-fonte;
+não é documento de planejamento — o roadmap é o `TODO.md`.
+
+**Atualizado em:** 2026-10-21.
+
+> Documento de inventário envelhece rápido. Se alguma afirmação aqui contradisser o código, o
+> código é que vale — e vale corrigir esta página.
 
 ---
 
-## 1. Backend (`backend/`) — Spring Boot
+## Visão geral
 
-**Stack:** Java 21, Spring Boot 3.2.5, Maven.
+Quatro peças, desenvolvidas separadamente:
 
-**Dependências principais** (`pom.xml`):
-- `spring-boot-starter-web`, `spring-boot-starter-validation`, `spring-boot-starter-actuator`
-- `spring-boot-starter-data-jpa` + `postgresql` (runtime) + `flyway-core` — **wireado mas não usado**: existe uma migration (`V1__init.sql`) e nenhuma entidade/repositório JPA aparece em lugar nenhum do código. Persistência está preparada na infra, mas o fluxo de cálculo de rota não usa banco.
-- `de.topobyte:osm4j-core/xml/pbf` — parsing de `.osm`/`.pbf`
-- `org.apache.commons:commons-math3` — usado só pelo pacote `validation/` (não é produção)
-- `spring-boot-starter-test` (JUnit 5)
-
-### Estrutura de pacotes (`src/main/java/com/routewise/`)
-
-```
-RouteWiseApplication.java        — entry point Spring Boot
-
-algorithm/
-  AStarWaypointOptimizer.java    — A* sobre estado (waypoint, bitmask de visitados); resolve
-                                    o TSP variante para ROUND_TRIP / OPEN_ROUTE / FIXED_START_END,
-                                    heurística admissível (mínima aresta de entrada)
-  HaversineUtil.java             — distância em linha reta, usado como fallback quando o OSRM
-                                    está indisponível
-
-config/
-  CorsConfig.java                 — libera origens configuradas (default localhost:5173) para /api/**
-  RestTemplateConfig.java         — bean RestTemplate usado pelo cliente OSRM
-
-controller/
-  RouteController.java            — único controller REST (endpoints abaixo)
-
-dto/
-  RouteRequestDto.java             — entrada {waypoints[2..10], routeMode}
-  RouteResultDto.java              — saída (waypoints ordenados, distância/duração, geometria,
-                                      segmentos, validação OSRM)
-  SseEventDto.java                  — payload de evento SSE (PROCESSING/COMPLETED/ERROR)
-  WaypointDto.java                  — {lat, lng}
-  osrm/OsrmRouteResponse.java, OsrmTableResponse.java — mapeamento das respostas do OSRM
-
-exception/
-  GlobalExceptionHandler.java       — mapeia erros de validação/domínio para ProblemDetail (RFC 9457)
-  OsrmClientException.java          — falhas HTTP do OSRM
-  RouteComputationException.java    — erros de domínio no cálculo de rota
-
-model/
-  RouteMode.java                    — enum ROUND_TRIP / OPEN_ROUTE / FIXED_START_END
-
-service/
-  IOsrmClient.java, IRouteOptimizerService.java, ISseEventService.java  — interfaces
-  impl/
-    OsrmClientServiceImpl.java      — chama OSRM /table e /route; converte lat/lng interno para
-                                       lon/lat (ordem do OSRM)
-    RouteOptimizerServiceImpl.java  — orquestra o pipeline: PROCESSING → matriz OSRM (fallback
-                                       Haversine) → A* → geometria OSRM (degradação graciosa) →
-                                       COMPLETED/ERROR via SSE
-    SseEventServiceImpl.java        — gerencia SseEmitter em memória por requestId
-  osm/
-    OsmGraphService.java            — carregador opcional de grafo OSM (osm4j), desligado a menos
-                                       que `routewise.osm.data-path` esteja configurado
-
-validation/  (44 arquivos)          — código de pesquisa/experimento standalone, NÃO é produção
-                                       (commons-math3 só serve pra isso). Cobre: calculadoras
-                                       empíricas de consumo de combustível e vida útil de pneu
-                                       (calibradas a partir de CSVs), modelagem de custo por tipo
-                                       de via, análise de ocupação de carga e desgaste por eixo,
-                                       experimentos de sensibilidade de custo, geração de cenários
-                                       estatísticos, e vários scripts "Example"/"Experiment" que
-                                       geram relatórios em Markdown (ex: ToledoRouteComparisonExample,
-                                       FleetRouteSimulationExample) — é o kit de validação empírica
-                                       do TCC, independente da API de roteamento em si.
-```
-
-### Endpoints REST (`RouteController`, base `/api/routes`)
-
-| Método | Path | Função |
+| Peça | Stack | Papel |
 |---|---|---|
-| `POST` | `/api/routes/compute` | Valida `{waypoints, routeMode}`, gera `requestId`, retorna `202 Accepted` |
-| `GET` | `/api/routes/events/{requestId}` | Stream SSE — dispara o cálculo em virtual thread, emite `PROCESSING` → `COMPLETED`/`ERROR` |
-| `GET` | `/api/routes/graph-stats` | Estatísticas do grafo OSM carregado (só relevante se `routewise.osm.data-path` estiver configurado) |
+| `backend/` | Java 21, Spring Boot 3.2.5 | Núcleo funcional (A*) + API REST + persistência |
+| `FrontEnd-Next/` | Next.js 16.2.12, React 19.2, Tailwind 4 | **Painel do gestor — é o que vai pra produção** |
+| `mobile/` | Flutter, Dart 3.5+ | App de campo do motorista (Android) |
+| `frontend/` | React 19, Vite 8, Leaflet | Protótipo de validação do A* — **congelado, não entrega** |
 
-Outros recursos: `application.properties`, migration Flyway `V1__init.sql`, `empirical-data/` (CSVs + `FONTES.md`). Testes existem para `algorithm/` (`AStarTieBreakBenchmarkTest`, `AStarWaypointOptimizerTest`, `HaversineUtilTest`) e para várias calculadoras de `validation/`.
+O fluxo de negócio implementado hoje:
+
+```
+Pedido (cliente + itens)  →  faturado  →  Rota (A* sobre os endereços)
+                                            ↓
+                              motorista abre a rota no app por código/QR
+                                            ↓
+                              registra chegada/entrega/ocorrência em campo
+                                            ↓
+                              entrega fecha o pedido (entregue)
+                                            ↓
+                              rota encerrada; o não entregue volta pra fila
+```
 
 ---
 
-## 2. `frontend/` — React + Vite (protótipo de testes)
+## 1. Backend (`backend/`)
 
-**Stack:** React 19.2, Vite 8, TypeScript ~6.0, `leaflet` + `react-leaflet`. Sem router, sem gerenciador de estado global — apenas estado de componente + hooks customizados. SPA de página única (`App.tsx`). Testes: Vitest + Testing Library (`useSseListener.test.ts`, `useWaypoints.test.ts`).
+**Dependências principais:** `spring-boot-starter-web`, `-validation`, `-actuator`, `-data-jpa`,
+`postgresql`, `flyway-core`, `jjwt` 0.12.6, `spring-security-crypto` (só o BCrypt — **não** o
+starter de segurança), `osm4j` 1.4.1 (core/xml/pbf), `commons-math3` 3.6.1 (só o pacote
+`validation/`).
 
-**Componentes** (`src/components/`):
+### Persistência — ativa
 
-| Componente | Função |
+PostgreSQL via JPA + Flyway. **15 entidades, 13 repositórios, 18 migrações** (`V1__init.sql`,
+baseline vazio, até `V18__create_mobile_users.sql`). `ddl-auto=validate`: o Hibernate confere as
+entidades contra o schema e nunca gera DDL — toda mudança de schema passa por migração nova.
+
+Entidades: `Vehicle`, `Driver`, `Unit`, `Product`, `Customer`, `Refueling`, `PaymentMethod`,
+`PaymentCondition`, `Order` (+ `OrderItem`, `OrderHistoryEntry`), `SavedRoute`, `RouteEvent`,
+`CompanySettings`, `MobileUser`.
+
+Serviços seguem `I<Nome>Service` + `<Nome>ServiceImpl`, `@Transactional` na classe com
+`@Transactional(readOnly = true)` nas leituras. Exclusões referenciais são barradas na camada de
+serviço, não por cascade de FK.
+
+### Pacotes (`src/main/java/com/routewise/`)
+
+```
+algorithm/     AStarWaypointOptimizer, HaversineUtil
+auth/          JwtService, MobileSession, MobileAuthFilter, RouteAccessCodeGenerator
+config/        CorsConfig, RestTemplateConfig, MobileAuthFilterConfig
+controller/    17 controllers REST
+dto/           ~44 records de entrada/saída (+ dto/osrm/)
+entity/        15 entidades JPA
+exception/     GlobalExceptionHandler (RFC 9457) + 7 exceções de domínio
+model/         RouteMode
+repository/    13 interfaces Spring Data
+service/       CRUD + RouteStopResolver, RouteOrderLifecycle, RouteStatus
+service/impl/  OsrmClientServiceImpl, RouteOptimizerServiceImpl, SseEventServiceImpl
+service/osm/   OsmGraphService (desligado por padrão)
+validation/    ~50 experimentos de TCC — não fazem parte do pipeline de requisição
+```
+
+### Endpoints REST
+
+Todos sob `/api`. Os CRUDs seguem a mesma forma (`GET`, `POST`, `PUT /{id}`, `DELETE /{id}`).
+
+| Base | Controller | Observação |
+|---|---|---|
+| `/api/auth/login` | `AuthController` | emite JWT pra **qualquer** e-mail, sem conferir senha |
+| `/api/vehicles`, `/api/drivers`, `/api/units`, `/api/products`, `/api/customers`, `/api/refuelings`, `/api/payment-methods`, `/api/payment-conditions` | um por recurso | CRUD puro |
+| `/api/orders` | `OrderController` | CRUD + `PATCH /{id}/status` |
+| `/api/routes` | `SavedRouteController` | `GET`, `GET /{id}`, `POST`, `PATCH /{id}/status`, `DELETE /{id}` |
+| `/api/routes/compute`, `/api/routes/events/{requestId}`, `/api/routes/graph-stats` | `RouteController` | pipeline de cálculo |
+| `/api/routes/{routeId}/events` | `RouteEventController` | log de acompanhamento |
+| `/api/mobile/auth/login` | `MobileAuthController` | login real do app (senha + aparelho cadastrado) |
+| `/api/mobile/routes/{code}` | `MobileRouteController` | `GET`, `POST /finish`, `POST /events`, `POST /events/batch` — **exige sessão de motorista** |
+| `/api/mobile-users` | `MobileUserController` | o gestor concede/revoga acesso ao app |
+| `/api/settings` | `CompanySettingsController` | `GET` + `PUT`, linha única |
+
+### Pipeline de cálculo de rota
+
+Dois passos, REST + SSE, e **não toca banco**:
+
+1. `POST /api/routes/compute` valida, guarda o pedido num `ConcurrentHashMap` em memória e devolve
+   `{requestId}` (202).
+2. `GET /api/routes/events/{requestId}` abre o `SseEmitter` e despacha o cálculo numa virtual
+   thread (Java 21).
+3. `RouteOptimizerServiceImpl` emite `PROCESSING`, busca a matriz de durações no OSRM (`/table`),
+   roda o A*, pede a geometria (`/route`) e emite `COMPLETED` ou `ERROR`.
+
+Duas degradações deliberadas: sem o `/table` do OSRM a matriz é aproximada por Haversine a 40 km/h
+(muda a **entrada da otimização**, não só o desenho); sem o `/route` a ordem otimizada volta sem
+geometria, com `osrmValidation: UNAVAILABLE`.
+
+### A*
+
+TSP variante por A* sobre estado `(waypoint atual, bitmask de visitados)`; custo é duração em
+segundos. Heurística admissível: para cada nó não visitado, a menor aresta de **entrada** na matriz
+(+ limite inferior do retorno, no `ROUND_TRIP`). Desempate por maior `g` — muda só quantos estados
+são expandidos, nunca o custo. Limite de 2–15 waypoints (espaço `N × 2^N`). Três modos, todos
+implementados: `ROUND_TRIP`, `OPEN_ROUTE`, `FIXED_START_END`.
+
+### Autenticação — duas histórias diferentes
+
+**App do motorista (`/api/mobile/**`) — real e exigida.** `MobileAuthController` confere senha em
+BCrypt contra `mobile_users` e recusa se o `deviceId` do pedido não for o que o gestor cadastrou.
+`MobileAuthFilter`, registrado só para `/api/mobile/*`, recusa com 401 qualquer outra chamada sem
+token válido. Os tokens do app levam `typ: "mobile"`, então um token do painel não passa por eles.
+O `deviceId` é o `Settings.Secure.ANDROID_ID` — **não é IMEI**, que o Android não entrega a app de
+terceiro desde a versão 10.
+
+**Painel (`/api/auth/login`) — só navegacional.** `AuthController` emite token pra qualquer e-mail,
+sem senha e sem tabela de usuário. A conferência de credencial mora no front
+(`app/api/login/route.ts`, par fixo no código) e o `proxy.ts` do Next valida o cookie só pra
+decidir se a tela abre. O `lib/apiClient.ts` **não manda** `Authorization`. Resultado: todo
+`/api/**`, menos `/api/mobile/**`, responde sem autenticação — inclusive `/api/mobile-users`, que é
+quem concede acesso ao app. O segredo do JWT está fixo no `application.properties` e duplicado no
+`docker-compose.yml` da raiz.
+
+### Ciclo pedido ↔ rota
+
+`RouteOrderLifecycle` é o único lugar que liga os dois, em quatro momentos: rota criada
+(`faturado → em_rota`), entrega registrada (`em_rota → entregue`, só os pedidos daquela parada),
+rota encerrada e rota excluída (`em_rota → faturado`, o "retorno à empresa"). O vínculo vive em
+`LabeledStop.orderIds`, dentro do JSON de paradas — `SavedRoute` guarda só a contagem. **Rotas
+salvas antes desse campo não têm vínculo e são ignoradas em silêncio:** o dado nunca foi registrado
+e não é recuperável.
+
+### Grafo OSM
+
+`OsmGraphService` carrega um `.osm`/`.pbf` em memória no startup, mas está **desligado por padrão**
+(`routewise.osm.data-path` em branco). Não alimenta o A* — a matriz vem do OSRM. Serve só ao
+`GET /api/routes/graph-stats`.
+
+### Testes
+
+**12 classes, 63 testes.** Dez em `algorithm/` e `validation/` (o otimizador, o benchmark de
+desempate, Haversine, as calculadoras empíricas). Duas em `service/`: `RouteStopResolverTest` e
+`RouteOrderLifecycleTest`, cobrindo o ciclo do pedido.
+
+Não há teste de controller nem de repositório, e nenhum `@SpringBootTest` (precisaria de Postgres
+de pé ou Testcontainers, que não estão montados).
+
+⚠️ **`mvn test` não é somente leitura.** `AStarTieBreakBenchmarkTest` reescreve
+`docs/refactor-math-result/comparacao-tempos.md` e `comparacao_15.md` com os tempos da máquina que
+rodou. Conferir `git status docs/` depois da suíte.
+
+---
+
+## 2. `FrontEnd-Next/` — painel do gestor (produção)
+
+**Stack:** Next.js 16.2.12 (App Router), React 19.2.4, TypeScript 5, Tailwind 4, `react-hook-form`
++ `zod` 4, `lucide-react`, `clsx`/`tailwind-merge`, `leaflet` + `react-leaflet`, `jose`.
+**Sem testes e sem runner configurado.**
+
+**Está ligado ao backend.** `lib/apiClient.ts` é o wrapper de fetch (lê `NEXT_PUBLIC_API_URL`,
+lança `ApiError` com a mensagem do problem detail); `services/<recurso>.ts` envolve os endpoints;
+`hooks/use<Recurso>.ts` guarda a lista + `isLoading`/`error` e expõe create/update/delete que
+recarregam do servidor.
+
+### Telas (`app/`)
+
+| Rota | Conteúdo |
 |---|---|
-| `MapView.tsx` | Mapa Leaflet: clique adiciona waypoint, marcadores numerados/coloridos por papel (início/fim/round-trip), auto-fit de bounds, polylines por segmento (clicáveis) |
-| `WaypointPanel.tsx` | Lista waypoints (lat/lng, botão remover), badge de contagem (máx 10) |
-| `RouteControls.tsx` | Checkbox de modo de rota, botão "Estimate Route" (spinner), botão "Reset" |
-| `SummaryPanel.tsx` | Distância/duração/modo total, detalhamento por segmento (clicável, sincroniza com o mapa), badge de validação OSRM |
-| `StatusSnackbar.tsx` | Toast de status do cálculo (SUBMITTING/PROCESSING/COMPLETED/ERROR) |
+| `/` | redireciona pra `/login` |
+| `/login` | `LoginForm` → `app/api/login/route.ts` (cookie httpOnly `routewise`) |
+| `/dashboard` | KPIs |
+| `/dashboard/veiculos`, `/motoristas`, `/abastecimentos` | cadastros de frota |
+| `/dashboard/acessos-app` | **acessos do app do motorista** (usuário, senha, aparelho autorizado) |
+| `/dashboard/unidades`, `/produtos` | catálogo |
+| `/dashboard/clientes` | clientes/fornecedores (campo `type`) |
+| `/dashboard/formas-pagamento`, `/condicoes-pagamento` | financeiro |
+| `/dashboard/pedidos` | pedidos + máquina de status |
+| `/dashboard/rotas` | lista de rotas salvas |
+| `/dashboard/rotas/gerar` | gera a rota a partir dos pedidos faturados (mapa + A* + SSE) |
+| `/dashboard/rotas/[id]` | acompanhamento: mapa, paradas, eventos, documentos |
+| `/dashboard/configuracoes` | dados da empresa (origem da rota) |
 
-**Hooks** (`src/hooks/`):
+`proxy.ts` (o Next 16 renomeou `middleware.ts` → `proxy.ts`) protege `/dashboard/:path*`.
 
-| Hook | Função |
-|---|---|
-| `useWaypoints.ts` | Estado do array de waypoints, limite 2–10, add/remove/clear |
-| `useSseListener.ts` | Wrapper do `EventSource` nativo, escuta PROCESSING/COMPLETED/ERROR, fecha stream em evento terminal |
+### Estrutura
 
-**Services** (`src/services/routeApi.ts`): `submitRoute()` (`POST /api/routes/compute`), `getSseUrl()` (monta URL do SSE). Espera proxy do Vite pro backend Spring Boot.
+- **`components/`** — 15 pastas por feature + `components/ui/` com 19 primitivas compartilhadas
+  (`Button`, `Input`, `Modal`, `ConfirmDialog`, `PageHeader`, `CreateButton`, `SearchInput`,
+  `EmptyState`, `LoadingState`, `ViewToggle`, `Pagination`, `ActionsMenu`, `SearchableSelect`,
+  `toast/`…). Cada cadastro repete a forma `<Feature>PageContent` + `<Feature>FormModal` +
+  `<Feature>Table` (+ `Card`/`Grid` onde há visão de cartões). **Não há primitiva `Select`** —
+  dropdown com busca é `SearchableSelect`; filtro simples é um `<select>` nativo estilizado.
+- **`hooks/`** — 16, um por recurso, mais `usePagination`, `useToast`, `useRouteComputation`.
+- **`services/`** — 18, incluindo quatro APIs públicas de terceiros chamadas direto do navegador,
+  todas gratuitas e sem chave: ViaCEP, BrasilAPI (CNPJ), FIPE via BrasilAPI, Nominatim
+  (geocoding, com CEP v2 da BrasilAPI como reserva e pin manual como último recurso).
+- **`lib/validations/`** — 15 schemas Zod, um por recurso.
 
-**Types** (`src/types/route.types.ts`): espelham os DTOs do backend 1:1.
+### Pontos mockados, declarados como mock
 
-**Status:** demo funcional de ponta a ponta (mapa → waypoints → cálculo → SSE → resultado), fala direto com o backend real. Sem autenticação, sem persistência, sem outras páginas — protótipo de propósito único pra validar o algoritmo/integração.
+- `components/rotas/tracking/DocumentsPanel.tsx` — a aba de anexos (canhoto, nota, foto) mostra o
+  formato final, mas nada sobe arquivo: falta decidir armazenamento, limite e retenção.
+- `lib/routePrototype.ts` — coordenadas aproximadas por cidade + jitter, ainda importado por
+  `GerarRotaScreen` e `GeocodeConfirmModal` como reserva quando o cliente não tem coordenada.
+
+### Lacunas conhecidas
+
+- **Modo escuro pela metade:** nenhum componente usa `dark:`. O escuro só repinta o fundo/texto do
+  `body` pelas variáveis CSS; cartões, modais e inputs têm classe clara fixa e não acompanham.
+- Máquina de status do pedido duplicada: `VALID_STATUS_TRANSITIONS` em `hooks/useOrders.ts` espelha
+  a constante do `OrderServiceImpl`. Mudar uma exige mudar a outra.
 
 ---
 
-## 3. `FrontEnd-Next/` — Next.js (frontend de produção)
+## 3. `mobile/` — app do motorista (Flutter)
 
-**Stack:** Next.js 16.2.12 (App Router), React 19.2, TypeScript 5, Tailwind CSS 4, `react-hook-form` + `zod`, `lucide-react`, `clsx`/`tailwind-merge`. Sem lib de estado global, sem testes configurados.
+Android primeiro. Dart 3.5+, `http`, `shared_preferences`, `connectivity_plus`, `url_launcher`,
+`mobile_scanner` (QR), `app_links` (deep link), `intl`, `uuid`. Consome **só** `/api/mobile/**`.
 
-### Rotas (`app/`)
+**Telas:** `login_screen` (usuário, senha e o identificador deste aparelho, com botão de copiar —
+é como o gestor recebe o código pra cadastrar), `open_route_screen` (QR, deep link ou código
+digitado), `route_summary_screen`, `stop_detail_screen`, `scan_code_screen`.
 
-| Rota | Arquivo | Status |
+**Serviços:** `api_client` (quatro chamadas + login, com `Authorization` em todas), `session_service`
+e `session_controller` (sessão entre aberturas), `device_identity` (canal nativo lendo o
+`ANDROID_ID`, com UUID gravado como reserva), `route_controller` (estado da rota juntando servidor e
+fila), `event_queue` (**uma fila por rota**), `deep_link_service`.
+
+A regra que organiza o app: **registrar nunca falha por falta de rede.** O evento entra na fila, a
+tela já reflete o efeito, e a sincronização acontece quando a conexão voltar.
+
+**Testes:** 4 arquivos / 39 testes — contrato de wire com `/api/mobile/**`, o que vale como código
+de acesso, a fila por rota e o contrato do login. `flutter analyze` é o portão de compilação real.
+
+**Pendente:** tela de mapa da rota (`route_map_screen.dart`, prevista no spec e não construída) e
+upload real de foto/canhoto (mesma decisão de armazenamento pendente do painel).
+
+Spec: `docs/superpowers/specs/2026-10-05-driver-mobile-app-design.md`.
+
+---
+
+## 4. `frontend/` — protótipo congelado
+
+React 19.2, Vite 8, TypeScript ~6.0, Leaflet. SPA de página única, sem router e sem estado global.
+Validou o núcleo de ponta a ponta (mapa → waypoints → cálculo → SSE → resultado) falando direto com
+o backend. Testes: Vitest + Testing Library (`useWaypoints`, `useSseListener`) — **os únicos testes
+de frontend do repositório**.
+
+**Não entrega e não recebe feature nova.** Fica como referência; UI nova vai no `FrontEnd-Next/`.
+
+---
+
+## Resumo honesto
+
+| Funciona de ponta a ponta | Mockado, declarado como mock | Ausente |
 |---|---|---|
-| `/` | `app/page.tsx` | Redireciona direto pra `/login` — não é uma landing page real |
-| `/login` | `app/login/page.tsx` | Renderiza `LoginForm` |
-| `/dashboard` | `app/dashboard/page.tsx` | Sidebar + `KpiRow`; abaixo tem um placeholder literal: *"(espaço em aberto — definimos depois o que vem aqui)"* |
-| `/dashboard/veiculos` | `app/dashboard/veiculos/page.tsx` | `VehiclesPageContent` — CRUD de veículos completo no client, sem backend |
-| Layout raiz | `app/layout.tsx` | Fontes (Nunito, Geist Mono), `ToastProvider` |
-
-### Componentes por pasta
-
-- **`components/auth/`**
-  - `LoginForm.tsx` — formulário com react-hook-form + zod, mostrar/ocultar senha, chama `services/auth.ts` (stub — ver abaixo)
-- **`components/dashboard/`**
-  - `Sidebar.tsx` — nav lateral agrupada (Geral → Dashboard; Cadastros → Veículos; Rotas → "Nova rota"/"Minhas rotas" **sem `href`**, ainda não ligadas)
-  - `KpiRow.tsx`, `KpiTile.tsx` — grid de KPIs (presentacional, provavelmente números estáticos)
-- **`components/ui/`** — design system básico: `Button`, `Checkbox`, `Divider`, `Input`, `Select`, `SocialButton`, mais `toast/` (`ToastProvider`, `ToastCard`, `ToastViewport`) — sistema de notificação funcional
-- **`components/vehicles/`** — a área mais completa:
-  - `VehiclesPageContent.tsx` — orquestrador: busca/filtro, toggle de view, criar/editar/deletar
-  - `VehicleCard.tsx`, `VehicleGrid.tsx`, `VehicleTable.tsx`, `ViewToggle.tsx`
-  - `VehicleFormModal.tsx` — modal criar/editar, react-hook-form + zod (`vehicleSchema`)
-  - `DeleteVehicleDialog.tsx` — confirmação de exclusão
-
-### Hooks (`hooks/`)
-
-- `useToast.ts` — wrapper do `ToastContext`
-- `useVehicles.ts` — **estado 100% local/em memória**: 4 veículos hardcoded como seed, create/update/delete só mutam estado React via `crypto.randomUUID()` — sem chamada de API, sem persistência entre reloads
-
-### `lib/`
-
-- `validations/auth.ts` — zod `loginSchema` (email, senha ≥8 chars, rememberMe)
-- `validations/vehicle.ts` — zod `vehicleSchema`: regex de placa brasileira (formato antigo `ABC-1234` e Mercosul `ABC1D23`), modelo/marca/cor obrigatórios, validação de ano, capacidade > 0, tipo de combustível (diesel/gasolina/etanol/elétrico)
-- `utils.ts` — `cn()` (clsx + tailwind-merge)
-
-### `services/auth.ts` — **mockado/desconectado, de propósito**
-
-```ts
-// Backend ainda não conectado — chamada de rede removida temporariamente.
-export async function login(_data: LoginFormData): Promise<AuthResponse> {
-  throw new Error("login() está desconectado do backend por enquanto.");
-}
-export function loginWithProvider(provider: "google" | "microsoft") {
-  console.warn(`loginWithProvider(${provider}) está desconectado do backend por enquanto.`);
-}
-```
-
-O formulário de login está todo pronto (validação, estados de erro/sucesso, UI) mas qualquer submit falha por design. **Não existe nenhuma chamada ao backend Spring Boot em `FrontEnd-Next`** — nenhum `fetch`/`axios` fora desse stub.
-
-### Resumo — funcional vs. pendente
-
-| Funcional (só client, sem backend) | Mockado/placeholder | Ausente |
-|---|---|---|
-| CRUD de veículos (criar/editar/deletar/buscar/toggle view) | Login (falha por design) | Qualquer conexão com `/api/routes/*` |
-| Notificações toast | Conteúdo principal do dashboard | UI de otimização de rota (mapa, waypoints, SSE) — existe só no `frontend/` |
-| Validação de formulários | Nav "Nova rota"/"Minhas rotas" (sem href) | |
-| Navegação entre rotas construídas | Página `/` (só redirect) | |
+| Cadastros (8 recursos), com CEP/CNPJ/FIPE automáticos | Anexos de documento/foto (painel e app) | Autenticação real no painel |
+| Pedidos com máquina de status | Coordenada aproximada por cidade (reserva) | Tela de registros de login do app |
+| Geração de rota (A* + OSRM + SSE) | | Mapa da rota no app do motorista |
+| Acompanhamento da rota (mapa, paradas, eventos) | | Testes de controller/repositório |
+| App do motorista: login com aparelho, rota por QR, eventos offline | | Modo escuro de verdade |
+| Ciclo do pedido fechado (faturado → em rota → entregue) | | |
