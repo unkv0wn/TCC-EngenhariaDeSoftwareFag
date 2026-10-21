@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/access_code.dart';
 import '../widgets/access_code_input_formatter.dart';
 import '../services/route_controller.dart';
+import '../services/session_controller.dart';
 import '../theme/app_theme.dart';
 import 'route_summary_screen.dart';
 import 'scan_code_screen.dart';
@@ -11,9 +12,15 @@ import 'scan_code_screen.dart';
 /// plano B, para quando o link não abre o app (aparelho sem o app instalado, link
 /// copiado e colado, mensagem encaminhada).
 class OpenRouteScreen extends StatefulWidget {
-  const OpenRouteScreen({super.key, required this.controller, this.initialCode});
+  const OpenRouteScreen({
+    super.key,
+    required this.controller,
+    required this.session,
+    this.initialCode,
+  });
 
   final RouteController controller;
+  final SessionController session;
   final String? initialCode;
 
   @override
@@ -77,8 +84,32 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
     }
 
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => RouteSummaryScreen(controller: widget.controller)),
+      MaterialPageRoute(
+        builder: (_) => RouteSummaryScreen(controller: widget.controller, session: widget.session),
+      ),
     );
+  }
+
+  /// Sair da conta. Confirma porque entrar de volta depende do gestor ter o aparelho
+  /// cadastrado, e o motorista pode estar na rua sem quem o atenda.
+  Future<void> _signOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sair da conta?'),
+        content: const Text(
+          'Você vai precisar do seu usuário e senha para entrar de novo. '
+          'Os registros que ainda não subiram continuam guardados neste aparelho.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Sair')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await widget.session.signOut();
   }
 
   @override
@@ -209,14 +240,27 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.route_outlined, color: Colors.white, size: 28),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.route_outlined, color: Colors.white, size: 28),
+              ),
+              const Spacer(),
+              // Sair fica aqui, e não só na tela da rota: quem está sem rota aberta
+              // também pode precisar devolver o aparelho ou trocar de usuário.
+              IconButton(
+                onPressed: _signOut,
+                icon: const Icon(Icons.logout, color: Colors.white),
+                tooltip: 'Sair da conta',
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           const Text(
@@ -224,9 +268,16 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
             style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'App do motorista — abra a rota que o gestor enviou',
-            style: TextStyle(color: AppColors.primary200, fontSize: 14, fontWeight: FontWeight.w600, height: 1.5),
+          Text(
+            widget.session.session?.driverName.isNotEmpty == true
+                ? '${widget.session.session!.driverName} — abra a rota que o gestor enviou'
+                : 'App do motorista — abra a rota que o gestor enviou',
+            style: const TextStyle(
+              color: AppColors.primary200,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              height: 1.5,
+            ),
           ),
         ],
       ),

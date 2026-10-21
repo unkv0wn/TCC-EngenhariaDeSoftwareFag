@@ -16,6 +16,7 @@ import {
   Route,
   Ruler,
   Settings,
+  Smartphone,
   Users,
   Wallet,
 } from "lucide-react";
@@ -52,6 +53,7 @@ const NAV_GROUPS: readonly NavGroupData[] = [
         items: [
           { href: "/dashboard/veiculos", label: "Veículos", icon: Car },
           { href: "/dashboard/motoristas", label: "Motoristas", icon: IdCard },
+          { href: "/dashboard/acessos-app", label: "Acessos do App", icon: Smartphone },
           { href: "/dashboard/abastecimentos", label: "Abastecimentos", icon: Fuel },
         ],
       },

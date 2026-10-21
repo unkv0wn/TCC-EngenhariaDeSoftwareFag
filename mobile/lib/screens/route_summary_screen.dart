@@ -3,15 +3,17 @@ import 'package:intl/intl.dart';
 
 import '../models/route_models.dart';
 import '../services/route_controller.dart';
+import '../services/session_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/sync_badge.dart';
 import 'stop_detail_screen.dart';
 
 /// Rota do dia: resumo, progresso, próxima parada em destaque e a lista completa.
 class RouteSummaryScreen extends StatelessWidget {
-  const RouteSummaryScreen({super.key, required this.controller});
+  const RouteSummaryScreen({super.key, required this.controller, required this.session});
 
   final RouteController controller;
+  final SessionController session;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +43,15 @@ class RouteSummaryScreen extends StatelessWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.qr_code_scanner, size: 20),
                       title: Text('Abrir outra rota'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _RouteAction.signOut,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.logout, size: 20),
+                      title: Text('Sair da conta'),
                     ),
                   ),
                 ],
@@ -431,7 +442,42 @@ class RouteSummaryScreen extends StatelessWidget {
     switch (action) {
       case _RouteAction.switchRoute:
         await _switchRoute(context);
+      case _RouteAction.signOut:
+        await _signOut(context);
     }
+  }
+
+  /// Sair da conta no meio da rota.
+  ///
+  /// A rota não é encerrada e a fila não é apagada: o aviso diz isso porque sair parece
+  /// perder tudo, e quem sai costuma estar devolvendo o aparelho no fim do turno — com
+  /// registro pendente que ainda vai subir no próximo login.
+  Future<void> _signOut(BuildContext context) async {
+    final pending = controller.pendingCount;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sair da conta?'),
+        content: Text(
+          pending == 0
+              ? 'A rota continua aberta e você volta a ela pelo mesmo código depois de entrar de novo.'
+              : 'Há $pending ${pending == 1 ? 'registro' : 'registros'} que ainda não subiram. '
+                  'Eles ficam guardados neste aparelho e sobem quando você entrar de novo com conexão.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Sair')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await session.signOut();
+
+    // Mesmo tratamento de "abrir outra rota": o portão de sessão da raiz troca a tela
+    // sozinho quando esta é a tela inicial, mas quando ela foi empilhada sobre a abertura
+    // é preciso o pop — senão a rota fica viva por cima do login.
+    if (context.mounted) _leave(context);
   }
 
   /// Sair da rota sem encerrá-la — é como se abre a segunda rota do dia quando o código
@@ -535,4 +581,4 @@ class RouteSummaryScreen extends StatelessWidget {
 
 /// Ações do menu da rota. Enum de um item só por enquanto, mas é ele que mantém o
 /// `onSelected` honesto quando a segunda ação aparecer.
-enum _RouteAction { switchRoute }
+enum _RouteAction { switchRoute, signOut }

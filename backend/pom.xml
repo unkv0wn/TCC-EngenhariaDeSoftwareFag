@@ -142,6 +142,19 @@
       <scope>runtime</scope>
     </dependency>
 
+    <!-- ════════════════════════════════════════════════════════════════
+         BCrypt para a senha do app do motorista.
+
+         É o spring-security-crypto sozinho, não o spring-boot-starter-security:
+         queremos o algoritmo de hash, não a cadeia de filtros e o
+         auto-configure que vêm com o starter (que trancaria /api/** inteiro
+         de uma vez). Versão gerenciada pelo spring-boot-starter-parent.
+    ═══════════════════════════════════════════════════════════════════ -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-crypto</artifactId>
+    </dependency>
+
   </dependencies>
 
   <build>

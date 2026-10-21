@@ -14,9 +14,13 @@ import 'event_queue.dart';
 /// entra na fila, a tela já reflete o efeito dele, e a sincronização acontece depois —
 /// quando a conexão voltar ou na próxima vez que o app abrir.
 class RouteController extends ChangeNotifier {
-  RouteController({ApiClient? api, EventQueue? queue})
+  RouteController({ApiClient? api, EventQueue? queue, this.onUnauthenticated})
       : _api = api ?? ApiClient(baseUrl: ApiClient.defaultBaseUrl),
         _queue = queue ?? EventQueue();
+
+  /// Chamado quando o servidor recusa a sessão (401). Quem escuta leva o app de volta ao
+  /// login: diferente de falta de sinal, insistir na mesma chamada não melhora nada.
+  final void Function()? onUnauthenticated;
 
   final ApiClient _api;
   final EventQueue _queue;
@@ -117,6 +121,7 @@ class RouteController extends ChangeNotifier {
         _code = null;
         _route = null;
       }
+      if (ex.isUnauthenticated) onUnauthenticated?.call();
       _error = ex.message;
     } finally {
       _isLoading = false;
@@ -205,8 +210,12 @@ class RouteController extends ChangeNotifier {
         }
         _route = await _api.fetchRoute(code);
       }
-    } on ApiException {
+    } on ApiException catch (ex) {
       // Continua na fila. Nova tentativa quando a conexão voltar.
+      //
+      // Sessão expirada é a exceção: a fila não sobe mais até alguém entrar de novo, e
+      // ficar em silêncio aqui deixaria o selo de pendentes crescendo sem explicação.
+      if (ex.isUnauthenticated) onUnauthenticated?.call();
     } finally {
       notifyListeners();
     }

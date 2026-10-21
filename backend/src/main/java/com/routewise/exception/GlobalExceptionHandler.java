@@ -173,6 +173,30 @@ public class GlobalExceptionHandler {
     return ResponseEntity.badRequest().body(problem);
   }
 
+  // ── Login do app: credencial inválida ────────────────────────────────────
+
+  @ExceptionHandler(MobileAuthException.class)
+  public ResponseEntity<ProblemDetail> handleMobileAuth(MobileAuthException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
+    problem.setTitle("Unauthorized");
+    problem.setDetail(ex.getMessage());
+    // Sem o usuário tentado no log: tentativa de login é dado de credencial, e log
+    // de aplicação circula por lugares que credencial não deveria alcançar.
+    log.warn("Mobile login refused: bad credentials");
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+  }
+
+  // ── Login do app: aparelho não autorizado ────────────────────────────────
+
+  @ExceptionHandler(DeviceNotAuthorizedException.class)
+  public ResponseEntity<ProblemDetail> handleDeviceNotAuthorized(DeviceNotAuthorizedException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
+    problem.setTitle("Device Not Authorized");
+    problem.setDetail(ex.getMessage());
+    log.warn("Mobile login refused: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+  }
+
   // ── Catch-all ────────────────────────────────────────────────────────────
 
   @ExceptionHandler(Exception.class)

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/route_models.dart';
+import 'session_service.dart';
 
 /// Erro já traduzido pro que a tela mostra.
 class ApiException implements Exception {
@@ -13,6 +14,13 @@ class ApiException implements Exception {
 
   /// Token inválido ou rota apagada — a tela volta pra abertura de rota.
   bool get isRouteGone => statusCode == 404;
+
+  /// Sessão expirada ou revogada: o app volta pro login, e insistir na mesma chamada
+  /// não resolve — ao contrário do erro de rede, que melhora quando o sinal volta.
+  bool get isUnauthenticated => statusCode == 401;
+
+  /// Credencial certa, aparelho não liberado. Só o gestor desfaz.
+  bool get isDeviceRefused => statusCode == 403;
 
   @override
   String toString() => message;
@@ -52,7 +60,33 @@ class ApiClient {
   final String baseUrl;
   final http.Client _client;
 
+  /// Token da sessão do motorista. Fora do login, toda chamada a `/api/mobile/**` precisa
+  /// dele: o servidor passou a exigi-lo (`MobileAuthFilter`), porque o código da rota
+  /// circula por WhatsApp e QR impresso e não prova quem está registrando.
+  String? token;
+
   static const _timeout = Duration(seconds: 15);
+
+  /// Entra com usuário, senha e o identificador deste aparelho.
+  ///
+  /// O `deviceId` é conferido contra o que o gestor cadastrou — é o que impede a senha,
+  /// se vazar, de servir em outro celular.
+  Future<DriverSession> login({
+    required String username,
+    required String password,
+    required String deviceId,
+  }) async {
+    final body = jsonEncode({'username': username, 'password': password, 'deviceId': deviceId});
+    final response = await _post('/api/mobile/auth/login', body);
+    final json = jsonDecode(response) as Map<String, dynamic>;
+
+    return DriverSession(
+      token: json['token'] as String,
+      driverId: json['driverId'] as String,
+      driverName: json['driverName'] as String? ?? '',
+      username: json['username'] as String? ?? username,
+    );
+  }
 
   Future<MobileRoute> fetchRoute(String code) async {
     final response = await _get('/api/mobile/routes/$code');
@@ -88,10 +122,20 @@ class ApiClient {
     return SyncOutcome(accepted: accepted, rejected: rejected);
   }
 
+  /// Cabeçalhos comuns. O `Authorization` só entra quando há sessão: o próprio login
+  /// passa por aqui e ainda não tem token nenhum para mandar.
+  Map<String, String> _headers({bool json = false}) {
+    final headers = {'Accept': 'application/json'};
+    if (json) headers['Content-Type'] = 'application/json';
+    final current = token;
+    if (current != null && current.isNotEmpty) headers['Authorization'] = 'Bearer $current';
+    return headers;
+  }
+
   Future<String> _get(String path) async {
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl$path'), headers: {'Accept': 'application/json'})
+          .get(Uri.parse('$baseUrl$path'), headers: _headers())
           .timeout(_timeout);
       return _read(response);
     } on ApiException {
@@ -106,7 +150,7 @@ class ApiClient {
       final response = await _client
           .post(
             Uri.parse('$baseUrl$path'),
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+            headers: _headers(json: true),
             body: body,
           )
           .timeout(_timeout);
