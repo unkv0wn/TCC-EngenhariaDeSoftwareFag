@@ -24,6 +24,18 @@ export interface LabeledStop {
    * antes do agrupamento não têm o campo — nesses casos trate como 1.
    */
   ordersCount?: number;
+  /**
+   * Quais pedidos esta parada entrega.
+   *
+   * É o que fecha o ciclo do pedido: ao registrar a entrega da parada, o backend
+   * (`RouteOrderLifecycle`) move estes pedidos para `entregue`. Sem este campo a
+   * entrega em campo não tinha como alcançar o pedido — a rota guardava só a
+   * contagem, e o vínculo não existia em lugar nenhum.
+   *
+   * Opcional porque rotas salvas antes dele não o têm, e esse vínculo não é
+   * recuperável: o dado nunca foi registrado. Nessas rotas a propagação não acontece.
+   */
+  orderIds?: string[];
 }
 
 export interface RoutePolyline {

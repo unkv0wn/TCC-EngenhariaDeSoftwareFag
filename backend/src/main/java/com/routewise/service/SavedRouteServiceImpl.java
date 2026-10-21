@@ -35,15 +35,18 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
   private final SavedRouteRepository repository;
   private final ObjectMapper objectMapper;
   private final RouteAccessCodeGenerator codeGenerator;
+  private final RouteOrderLifecycle orderLifecycle;
 
   public SavedRouteServiceImpl(
     SavedRouteRepository repository,
     ObjectMapper objectMapper,
-    RouteAccessCodeGenerator codeGenerator
+    RouteAccessCodeGenerator codeGenerator,
+    RouteOrderLifecycle orderLifecycle
   ) {
     this.repository = repository;
     this.objectMapper = objectMapper;
     this.codeGenerator = codeGenerator;
+    this.orderLifecycle = orderLifecycle;
   }
 
   @Override
@@ -79,15 +82,25 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
     entity.setTotalDistanceKm(result.path("totalDistanceKm").asDouble());
     entity.setTotalDurationMin(result.path("totalDurationMin").asDouble());
 
-    return toDto(repository.save(entity));
+    SavedRoute saved = repository.save(entity);
+
+    // Os pedidos saem da fila de faturados agora, não quando o caminhão sai: é o que
+    // impede o mesmo pedido de entrar numa segunda rota. Ver RouteOrderLifecycle.
+    orderLifecycle.onRouteCreated(saved);
+
+    return toDto(saved);
   }
 
   @Override
   public void delete(UUID id) {
-    if (!repository.existsById(id)) {
-      throw new ResourceNotFoundException("Rota não encontrada: " + id);
-    }
-    repository.deleteById(id);
+    SavedRoute entity = findOrThrow(id);
+
+    // Antes de apagar: o que estava em rota volta para a fila. Sem isto o pedido ficaria
+    // em `em_rota` apontando para uma rota que não existe mais — fora da fila de
+    // faturados e sem nenhuma entrega a caminho.
+    orderLifecycle.onRouteClosed(entity, "rota excluída");
+
+    repository.delete(entity);
   }
 
   @Override
@@ -103,7 +116,15 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
       );
     }
     entity.setStatus(status);
-    return toDto(repository.save(entity));
+    SavedRoute saved = repository.save(entity);
+
+    // Rota encerrada devolve à fila o que não foi entregue. Vale para o gestor fechando
+    // na web e para o motorista fechando no app — o `finish` do app passa por aqui.
+    if (RouteStatus.CONCLUIDA.equals(status)) {
+      orderLifecycle.onRouteClosed(saved, "rota encerrada");
+    }
+
+    return toDto(saved);
   }
 
   @Override

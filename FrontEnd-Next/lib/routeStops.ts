@@ -40,8 +40,13 @@ export function buildRouteStops(orders: Order[], customers: Customer[]): Labeled
     const existing = byLocation.get(key);
     if (existing) {
       existing.ordersCount = (existing.ordersCount ?? 1) + 1;
+      existing.orderIds = [...(existing.orderIds ?? []), order.id];
     } else {
-      byLocation.set(key, { label, lat: coord.lat, lng: coord.lng, ordersCount: 1 });
+      // `orderIds` acompanha a contagem porque é o vínculo que fecha o pedido quando a
+      // entrega é registrada. Agrupar por endereço sem guardar os ids deixaria a parada
+      // sabendo *quantos* pedidos entrega e não *quais* — e era isso que mantinha o
+      // ciclo do pedido aberto. Ver `RouteOrderLifecycle` no backend.
+      byLocation.set(key, { label, lat: coord.lat, lng: coord.lng, ordersCount: 1, orderIds: [order.id] });
     }
   }
 

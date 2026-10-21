@@ -36,15 +36,18 @@ public class RouteEventServiceImpl implements IRouteEventService {
   private final RouteEventRepository repository;
   private final SavedRouteRepository routeRepository;
   private final RouteStopResolver stopResolver;
+  private final RouteOrderLifecycle orderLifecycle;
 
   public RouteEventServiceImpl(
     RouteEventRepository repository,
     SavedRouteRepository routeRepository,
-    RouteStopResolver stopResolver
+    RouteStopResolver stopResolver,
+    RouteOrderLifecycle orderLifecycle
   ) {
     this.repository = repository;
     this.routeRepository = routeRepository;
     this.stopResolver = stopResolver;
+    this.orderLifecycle = orderLifecycle;
   }
 
   @Override
@@ -114,7 +117,19 @@ public class RouteEventServiceImpl implements IRouteEventService {
 
     // saveAndFlush, não save: o @CreationTimestamp só é preenchido no flush, e sem ele
     // a resposta sairia com `createdAt: null` — um campo do DTO mentindo.
-    return toDto(repository.saveAndFlush(entity));
+    RouteEventDto saved = toDto(repository.saveAndFlush(entity));
+
+    // A entrega em campo é o que fecha o pedido. Fica depois do flush porque o evento é
+    // o fato primário: o status do pedido é consequência dele, não condição para ele.
+    //
+    // Não precisa de guarda de idempotência própria — o reenvio da fila offline já
+    // retornou mais acima, pelo clientEventId, sem chegar aqui. E uma segunda entrega
+    // registrada à mão na web encontra o pedido já em `entregue` e é ignorada.
+    if ("entrega".equals(type) && request.stopIndex() != null) {
+      orderLifecycle.onDelivered(route, request.stopIndex());
+    }
+
+    return saved;
   }
 
   @Override
