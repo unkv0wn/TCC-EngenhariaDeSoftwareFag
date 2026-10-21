@@ -13,10 +13,21 @@ interface RouteMapProps {
   result: RouteResultDto;
   /** Paradas de cliente com coordenada — pra casar o rótulo de cada waypoint otimizado. */
   stops?: LabeledStop[];
+  /** Parada destacada agora, na mesma numeração da lista (`marker.order`). */
+  selectedStop?: number | null;
+  /** Clique no marcador seleciona a parada lá na lista — o caminho inverso do destaque. */
+  onSelectStop?: (order: number) => void;
 }
 
 const DEPOT_COLOR = "#111827";
 const STOP_COLOR = "#4E79A7";
+/**
+ * Cor da seleção, a mesma dos dois lados (aqui e no StopsPanel) — é o que faz o
+ * destaque ser lido como "este item e este marcador são a mesma parada" em vez de
+ * duas marcações independentes. Vai como hex porque o `divIcon` abaixo é HTML cru,
+ * fora do alcance das classes do Tailwind; equivale ao token `primary-600`.
+ */
+const SELECTED_COLOR = "#7c3aed";
 
 /**
  * Marcador como distintivo numerado em vez de bolinha lisa: o número é a posição da
@@ -27,14 +38,17 @@ const STOP_COLOR = "#4E79A7";
  * dentro de um CircleMarker. `className: ""` zera o estilo padrão do Leaflet, que
  * viria com fundo branco e borda própria por cima do nosso.
  */
-function markerIcon(order: number): L.DivIcon {
+function markerIcon(order: number, isSelected: boolean): L.DivIcon {
   const isDepot = order === 0;
-  const size = isDepot ? 26 : 24;
-  const background = isDepot ? DEPOT_COLOR : "#ffffff";
-  const textColor = isDepot ? "#ffffff" : STOP_COLOR;
-  const borderColor = isDepot ? DEPOT_COLOR : STOP_COLOR;
+  // A parada selecionada cresce e inverte (fundo cheio, número branco): num mapa com
+  // dez distintivos quase iguais, só mudar a cor da borda passa despercebido.
+  const size = isSelected ? 32 : isDepot ? 26 : 24;
+  const background = isSelected ? SELECTED_COLOR : isDepot ? DEPOT_COLOR : "#ffffff";
+  const textColor = isSelected || isDepot ? "#ffffff" : STOP_COLOR;
+  const borderColor = isSelected ? SELECTED_COLOR : isDepot ? DEPOT_COLOR : STOP_COLOR;
   // O depósito não entra na contagem de paradas — recebe um "P" de partida.
   const content = isDepot ? "P" : String(order);
+  const halo = isSelected ? `0 0 0 4px rgba(124,58,237,0.25), ` : "";
 
   return L.divIcon({
     className: "",
@@ -48,10 +62,28 @@ function markerIcon(order: number): L.DivIcon {
       background:${background};
       border:2px solid ${borderColor};
       color:${textColor};
-      font-family:inherit;font-size:12px;font-weight:700;line-height:1;
-      box-shadow:0 1px 3px rgba(17,24,39,0.35);
+      font-family:inherit;font-size:${isSelected ? 14 : 12}px;font-weight:700;line-height:1;
+      box-shadow:${halo}0 1px 3px rgba(17,24,39,0.35);
     ">${content}</div>`,
   });
+}
+
+/**
+ * Traz a parada selecionada pra vista — mas só quando ela está fora do enquadramento.
+ * Centralizar sempre faria o mapa saltar a cada clique mesmo com o marcador já visível,
+ * que é desorientador; e o zoom fica intocado de propósito, porque mexer nele tira do
+ * usuário o enquadramento que ele mesmo escolheu.
+ */
+function PanToSelected({ position }: { position: [number, number] | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!position) return;
+    if (map.getBounds().contains(position)) return;
+    map.panTo(position, { animate: true });
+  }, [map, position]);
+
+  return null;
 }
 
 /** Enquadra o mapa nos pontos da rota — sem isso, o zoom fixo mostrava o continente inteiro. */
@@ -114,9 +146,14 @@ function CapturePinchZoom() {
   return null;
 }
 
-export function RouteMap({ result, stops = [] }: RouteMapProps) {
+export function RouteMap({ result, stops = [], selectedStop = null, onSelectStop }: RouteMapProps) {
   const polylines = useMemo(() => routePolylines(result), [result]);
   const markers = useMemo(() => routeMarkers(result, stops), [result, stops]);
+
+  const selectedPosition = useMemo<[number, number] | null>(
+    () => markers.find((marker) => marker.order === selectedStop)?.position ?? null,
+    [markers, selectedStop]
+  );
 
   const allPositions = useMemo<[number, number][]>(() => {
     const points: [number, number][] = [];
@@ -136,6 +173,7 @@ export function RouteMap({ result, stops = [] }: RouteMapProps) {
 
       <FitToRoute positions={allPositions} />
       <CapturePinchZoom />
+      <PanToSelected position={selectedPosition} />
 
       {polylines.map((line, index) => (
         <Polyline key={index} positions={line.positions} pathOptions={{ color: line.color, weight: 4, opacity: 0.85 }} />
@@ -145,10 +183,18 @@ export function RouteMap({ result, stops = [] }: RouteMapProps) {
         <Marker
           key={marker.order}
           position={marker.position}
-          icon={markerIcon(marker.order)}
+          icon={markerIcon(marker.order, marker.order === selectedStop)}
           // Sem isso as paradas seguintes ficam por cima das anteriores conforme o
           // Leaflet as empilha por latitude; assim a ordem de leitura acompanha a rota.
-          zIndexOffset={marker.order}
+          // A selecionada sobe acima de todas — destaque encoberto por um vizinho não
+          // destaca nada, e é justamente em parada aglomerada que ele mais importa.
+          zIndexOffset={marker.order === selectedStop ? 1000 : marker.order}
+          eventHandlers={
+            // O depósito não é parada: não entra na lista, então não tem o que destacar lá.
+            marker.order === 0 || !onSelectStop
+              ? {}
+              : { click: () => onSelectStop(marker.order) }
+          }
         >
           <Popup>
             {marker.order === 0 ? marker.label : `${marker.order}. ${marker.label}`}

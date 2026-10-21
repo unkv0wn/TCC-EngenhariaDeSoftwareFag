@@ -72,6 +72,27 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
   const [eventToDelete, setEventToDelete] = useState<RouteEvent | null>(null);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
+  /**
+   * Parada destacada, compartilhada entre a lista e o mapa — é o que amarra os dois
+   * painéis: antes a numeração era a mesma nos dois (`routeMarkers` é a fonte comum),
+   * mas achar no mapa a parada que se leu na lista era trabalho do olho do usuário.
+   * Clicar de novo na mesma parada desfaz, senão o destaque fica preso sem saída óbvia.
+   */
+  const [selectedStop, setSelectedStop] = useState<number | null>(null);
+
+  function toggleSelectedStop(stopIndex: number) {
+    setSelectedStop((current) => (current === stopIndex ? null : stopIndex));
+  }
+
+  /**
+   * Clique no marcador também traz a aba de paradas à frente: destacar um item de uma
+   * lista que não está montada é destaque que ninguém vê. Vindo da própria lista a aba
+   * já é essa, então o caminho de ida não sente diferença.
+   */
+  function selectStopFromMap(stopIndex: number) {
+    toggleSelectedStop(stopIndex);
+    setTab("paradas");
+  }
 
   const route = routes.find((option) => option.id === routeId);
   const driver = drivers.find((option) => option.id === route?.driverId);
@@ -187,7 +208,12 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
               <div className="h-[560px] overflow-hidden rounded-xl border border-gray-200 bg-white">
-                <RouteMap result={route.result} stops={route.stops} />
+                <RouteMap
+                  result={route.result}
+                  stops={route.stops}
+                  selectedStop={selectedStop}
+                  onSelectStop={selectStopFromMap}
+                />
               </div>
 
               <div className="flex flex-col gap-3">
@@ -203,6 +229,8 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
                       route={route}
                       deliveredStopIndexes={deliveredStopIndexes}
                       locked={isFinished}
+                      selectedStop={selectedStop}
+                      onSelectStop={toggleSelectedStop}
                       onRegisterDelivery={(stopIndex) => setFormState({ type: "entrega", stopIndex })}
                     />
                   )}
