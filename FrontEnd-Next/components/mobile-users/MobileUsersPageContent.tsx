@@ -114,7 +114,7 @@ export function MobileUsersPageContent() {
         </PageHeader>
 
         {withoutDevice > 0 && (
-          <div className="mb-4 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-[12.5px] font-semibold leading-relaxed text-warning-800">
+          <div className="mb-4 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-[12.5px] font-semibold leading-relaxed text-warning-700">
             {withoutDevice === 1
               ? "1 acesso ainda não tem aparelho cadastrado e não consegue entrar."
               : `${withoutDevice} acessos ainda não têm aparelho cadastrado e não conseguem entrar.`}{" "}

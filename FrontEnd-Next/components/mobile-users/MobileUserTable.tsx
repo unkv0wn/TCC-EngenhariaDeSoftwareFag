@@ -73,7 +73,7 @@ export function MobileUserTable({ mobileUsers, onEdit, onDelete }: MobileUserTab
                   <div className="flex items-start gap-2">
                     <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-500" aria-hidden="true" />
                     <div>
-                      <p className="font-bold text-warning-800">Nenhum aparelho</p>
+                      <p className="font-bold text-warning-700">Nenhum aparelho</p>
                       <p className="text-[11.5px] font-semibold text-gray-500">
                         Peça ao motorista o código da tela de login
                       </p>
