@@ -21,7 +21,7 @@ import { ALL_STATUSES_VALUE, OrderStatusFilter } from "@/components/orders/Order
 import { OrderTable } from "@/components/orders/OrderTable";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useDrivers } from "@/hooks/useDrivers";
-import { useOrders, type Order } from "@/hooks/useOrders";
+import { canEditOrder, canSelectOrder, useOrders, type Order } from "@/hooks/useOrders";
 import { usePaymentConditions } from "@/hooks/usePaymentConditions";
 import { usePaymentMethods } from "@/hooks/usePaymentMethods";
 import { useProducts } from "@/hooks/useProducts";
@@ -145,6 +145,11 @@ export function OrdersPageContent() {
   }
 
   function toggleSelect(id: string) {
+    // Guarda aqui também, e não só na caixa de seleção: a tela esconde a caixa do pedido
+    // terminal, mas quem chama isto não deveria depender de a tela ter lembrado disso.
+    const order = orders.find((candidate) => candidate.id === id);
+    if (!order || !canSelectOrder(order)) return;
+
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -154,11 +159,13 @@ export function OrdersPageContent() {
   }
 
   function toggleSelectAll() {
+    const selectable = pagedOrders.filter(canSelectOrder);
+
     setSelectedIds((prev) => {
-      const allSelected = pagedOrders.length > 0 && pagedOrders.every((order) => prev.has(order.id));
+      const allSelected = selectable.length > 0 && selectable.every((order) => prev.has(order.id));
       const next = new Set(prev);
-      if (allSelected) pagedOrders.forEach((order) => next.delete(order.id));
-      else pagedOrders.forEach((order) => next.add(order.id));
+      if (allSelected) selectable.forEach((order) => next.delete(order.id));
+      else selectable.forEach((order) => next.add(order.id));
       return next;
     });
   }
@@ -314,6 +321,10 @@ export function OrdersPageContent() {
             paymentConditions={paymentConditions}
             onClose={closeForm}
             onSubmit={handleSubmit}
+            // Pedido fora de "aguardando" abre travado, só para consulta. O servidor
+            // recusa a edição de qualquer jeito (OrderServiceImpl.update); isto evita
+            // oferecer um formulário que não teria como salvar.
+            readOnly={formOrder !== null && !canEditOrder(formOrder)}
           />
         )}
 

@@ -20,6 +20,46 @@ export interface OrderHistoryEntry {
 export interface Order extends OrderFormData {
   id: string;
   history: OrderHistoryEntry[];
+  /**
+   * Quando a entrega aconteceu — o horário do evento do motorista, não o da
+   * sincronização. Nulo até o pedido ser entregue, e também nos entregues antes da
+   * migração V19, onde o dado nunca foi registrado.
+   *
+   * Não está em `OrderFormData` de propósito: é escrito pelo servidor, nunca enviado.
+   */
+  deliveredAt: string | null;
+}
+
+/**
+ * Único status em que o pedido ainda é rascunho. Espelha `EDITABLE_STATUS` do
+ * `OrderServiceImpl`, que é quem de fato recusa — isto aqui só evita abrir um formulário
+ * que o servidor não aceitaria salvar.
+ */
+export const EDITABLE_ORDER_STATUS: OrderStatus = "aguardando";
+
+export function canEditOrder(order: Order): boolean {
+  return order.status === EDITABLE_ORDER_STATUS;
+}
+
+/**
+ * Pedido em status terminal: não aceita mais nenhuma transição (`entregue`, `cancelado`).
+ *
+ * Derivado do próprio mapa de transições, e não de uma lista à parte — assim acrescentar
+ * um status terminal no futuro não exige lembrar de atualizar dois lugares.
+ */
+export function isTerminalOrder(order: Order): boolean {
+  return VALID_STATUS_TRANSITIONS[order.status].length === 0;
+}
+
+/**
+ * Pode entrar na seleção das ações em massa?
+ *
+ * As ações em massa são, em essência, mudanças de status. Um pedido terminal não aceita
+ * nenhuma, então selecioná-lo só rendia um toast dizendo que nada aconteceu — a tela
+ * oferecia o que não tinha como fazer.
+ */
+export function canSelectOrder(order: Order): boolean {
+  return !isTerminalOrder(order);
 }
 
 function todayIsoDate(): string {

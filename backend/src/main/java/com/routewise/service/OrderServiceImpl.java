@@ -51,22 +51,48 @@ public class OrderServiceImpl implements IOrderService {
     return repository.findAll().stream().map(this::toDto).toList();
   }
 
+  /**
+   * O único status em que o pedido ainda é um rascunho. Depois de faturado ele já entrou
+   * na operação — pode estar numa rota, pode ter saído com o caminhão — e mudar itens ou
+   * valores reescreveria o passado.
+   */
+  private static final String EDITABLE_STATUS = "aguardando";
+
+  private static final String DELIVERED_STATUS = "entregue";
+
   @Override
   public OrderDto create(OrderRequestDto request) {
     Order entity = new Order(UUID.randomUUID());
     applyRequest(entity, request);
-    entity.getHistory().add(new OrderHistoryEntry(request.status(), Instant.now()));
+    // Pedido nasce aguardando, sempre. Aceitar o status do corpo deixaria criar um pedido
+    // já "entregue", que nunca passou por rota nenhuma e que ninguém poderia corrigir,
+    // porque entregue é terminal.
+    entity.setStatus(EDITABLE_STATUS);
+    entity.getHistory().add(new OrderHistoryEntry(EDITABLE_STATUS, Instant.now()));
     return toDto(repository.save(entity));
   }
 
+  /**
+   * Edita o pedido — só enquanto ele for rascunho.
+   *
+   * <p>O status **não** é lido do corpo. Antes disto ele era, e sem validação alguma: um
+   * {@code PUT} com {@code status: "entregue"} levava um pedido de aguardando direto a
+   * entregue, pulando faturado e em rota. A máquina de estados inteira, e o
+   * {@code PATCH /{id}/status} que a aplica, eram contornáveis pelo endpoint comum de
+   * edição — e o ciclo rota↔pedido depende desses estados significarem algo.
+   */
   @Override
   public OrderDto update(UUID id, OrderRequestDto request) {
     Order entity = findOrThrow(id);
-    boolean statusChanged = !entity.getStatus().equals(request.status());
-    applyRequest(entity, request);
-    if (statusChanged) {
-      entity.getHistory().add(new OrderHistoryEntry(request.status(), Instant.now()));
+
+    if (!EDITABLE_STATUS.equals(entity.getStatus())) {
+      throw new IllegalArgumentException(
+        "Este pedido está '" + entity.getStatus() + "' e não pode mais ser alterado. "
+          + "Só pedidos aguardando faturamento podem ser editados."
+      );
     }
+
+    applyRequest(entity, request);
     return toDto(repository.save(entity));
   }
 
@@ -80,6 +106,11 @@ public class OrderServiceImpl implements IOrderService {
 
   @Override
   public OrderDto changeStatus(UUID id, String status) {
+    return changeStatus(id, status, Instant.now());
+  }
+
+  @Override
+  public OrderDto changeStatus(UUID id, String status, Instant occurredAt) {
     Order entity = findOrThrow(id);
     if (entity.getStatus().equals(status)) {
       return toDto(entity);
@@ -91,7 +122,15 @@ public class OrderServiceImpl implements IOrderService {
       );
     }
     entity.setStatus(status);
+
+    // O histórico guarda quando o servidor registrou; `deliveredAt` guarda quando a
+    // entrega aconteceu. Os dois diferem sempre que o motorista registrou sem sinal e a
+    // fila subiu depois — e é o segundo que vale como data de entrega.
     entity.getHistory().add(new OrderHistoryEntry(status, Instant.now()));
+    if (DELIVERED_STATUS.equals(status)) {
+      entity.setDeliveredAt(occurredAt);
+    }
+
     return toDto(repository.save(entity));
   }
 
@@ -102,7 +141,8 @@ public class OrderServiceImpl implements IOrderService {
     entity.setPaymentMethodId(request.paymentMethodId());
     entity.setPaymentConditionId(request.paymentConditionId());
     entity.setDate(request.date());
-    entity.setStatus(request.status());
+    // O status NÃO sai daqui: ele só muda por changeStatus, que valida a transição.
+    // Tê-lo neste método era o que deixava o PUT de edição reescrever o status à vontade.
     entity.setDiscount(request.discount());
     entity.setShippingCost(request.shippingCost());
     entity.setNotes(request.notes());
@@ -135,6 +175,7 @@ public class OrderServiceImpl implements IOrderService {
       entity.getPaymentConditionId(),
       entity.getDate(),
       entity.getStatus(),
+      entity.getDeliveredAt(),
       items,
       entity.getDiscount(),
       entity.getShippingCost(),

@@ -53,6 +53,14 @@ public class Order {
   @Column(nullable = false, length = 20)
   private String status;
 
+  /**
+   * Quando a entrega aconteceu — o {@code occurredAt} do evento do motorista, não o
+   * instante em que o servidor soube. Nula enquanto o pedido não foi entregue, e também
+   * nos entregues antes da V19, onde o dado nunca foi registrado.
+   */
+  @Column(name = "delivered_at")
+  private Instant deliveredAt;
+
   @Column(nullable = false)
   private double discount;
 
@@ -148,6 +156,14 @@ public class Order {
 
   public void setStatus(String status) {
     this.status = status;
+  }
+
+  public Instant getDeliveredAt() {
+    return deliveredAt;
+  }
+
+  public void setDeliveredAt(Instant deliveredAt) {
+    this.deliveredAt = deliveredAt;
   }
 
   public double getDiscount() {

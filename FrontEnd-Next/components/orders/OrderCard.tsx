@@ -1,15 +1,15 @@
 "use client";
 
-import { Ban, CheckCircle2, Copy, Pencil, Printer, Receipt, Trash2, Truck, type LucideIcon } from "lucide-react";
+import { Ban, CheckCircle2, Copy, Eye, PackageCheck, Pencil, Printer, Receipt, Trash2, Truck, type LucideIcon } from "lucide-react";
 
 import { ActionsMenu, type ActionMenuItem } from "@/components/ui/ActionsMenu";
 import { cn } from "@/lib/utils";
 import type { Customer } from "@/hooks/useCustomers";
 import type { Driver } from "@/hooks/useDrivers";
-import type { Order } from "@/hooks/useOrders";
+import { canEditOrder, canSelectOrder, type Order } from "@/hooks/useOrders";
 import type { PaymentMethod } from "@/hooks/usePaymentMethods";
 import type { Vehicle } from "@/hooks/useVehicles";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { calculateOrderTotal } from "@/lib/orderCalculations";
 import { getNextStatusActions } from "@/lib/orderStatusActions";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/validations/order";
@@ -65,6 +65,7 @@ export function OrderCard({
   const paymentMethod = paymentMethods.find((option) => option.id === order.paymentMethodId);
   const statusLabel = ORDER_STATUSES.find((option) => option.value === order.status)?.label;
   const itemCount = order.items.length;
+  const selectable = canSelectOrder(order);
 
   const statusGroup: ActionMenuItem[] = getNextStatusActions(order.status).map((action) => ({
     label: action.label,
@@ -75,7 +76,13 @@ export function OrderCard({
   const utilityGroup: ActionMenuItem[] = [
     { label: "Imprimir", icon: Printer, onClick: () => onPrint(order) },
     { label: "Duplicar", icon: Copy, onClick: () => onDuplicate(order) },
-    { label: "Editar", icon: Pencil, onClick: () => onEdit(order) },
+    // Fora de "aguardando" o modal abre travado, então chamar a ação de "Editar" seria
+    // prometer o que a tela não faz.
+    {
+      label: canEditOrder(order) ? "Editar" : "Ver pedido",
+      icon: canEditOrder(order) ? Pencil : Eye,
+      onClick: () => onEdit(order),
+    },
     { label: "Excluir", icon: Trash2, onClick: () => onDelete(order), variant: "danger" },
   ];
 
@@ -86,6 +93,12 @@ export function OrderCard({
         selected ? "border-primary-400 ring-1 ring-primary-400" : "border-gray-200"
       )}
     >
+      {/*
+        Pedido terminal não entra na seleção: as ações em massa são mudanças de status, e
+        ele não aceita nenhuma. Some em vez de aparecer desabilitado — uma caixa que só
+        existe na passagem do mouse e vem apagada confunde mais do que ausência.
+      */}
+      {selectable && (
       <input
         type="checkbox"
         checked={selected}
@@ -96,6 +109,7 @@ export function OrderCard({
           selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         )}
       />
+      )}
 
       <div className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-100">
         <ActionsMenu
@@ -118,6 +132,17 @@ export function OrderCard({
             {driver?.fullName ?? "—"}
           </p>
           <p>{paymentMethod?.name ?? "—"}</p>
+          {/*
+            Data da entrega, quando houve. É o horário do evento do motorista, não o da
+            sincronização — por isso vale mostrar junto da hora, e não só o dia.
+            Entregas anteriores à V19 não têm o dado e simplesmente não exibem a linha.
+          */}
+          {order.deliveredAt && (
+            <p className="mt-1 flex items-center gap-1.5 font-bold text-success-700">
+              <PackageCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Entregue em {formatDateTime(order.deliveredAt)}
+            </p>
+          )}
         </div>
         <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-[11.5px] font-semibold text-gray-500">
           <span>Total</span>

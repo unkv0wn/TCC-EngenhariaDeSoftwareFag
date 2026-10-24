@@ -4,10 +4,10 @@ import { ActionsMenu, type ActionMenuItem } from "@/components/ui/ActionsMenu";
 import { cn } from "@/lib/utils";
 import type { Customer } from "@/hooks/useCustomers";
 import type { Driver } from "@/hooks/useDrivers";
-import type { Order } from "@/hooks/useOrders";
+import { canSelectOrder, type Order } from "@/hooks/useOrders";
 import type { PaymentMethod } from "@/hooks/usePaymentMethods";
 import type { Vehicle } from "@/hooks/useVehicles";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { calculateOrderTotal } from "@/lib/orderCalculations";
 import { getNextStatusActions } from "@/lib/orderStatusActions";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/validations/order";
@@ -65,7 +65,11 @@ export function OrderTable({
   onPrint,
   onChangeStatus,
 }: OrderTableProps) {
-  const allSelected = orders.length > 0 && orders.every((order) => selectedIds.has(order.id));
+  // Só conta os selecionáveis: com os terminais na conta, "todos selecionados" nunca
+  // ficaria verdadeiro numa página que tivesse um pedido entregue.
+  const selectableOrders = orders.filter(canSelectOrder);
+  const allSelected =
+    selectableOrders.length > 0 && selectableOrders.every((order) => selectedIds.has(order.id));
 
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -116,16 +120,29 @@ export function OrderTable({
             return (
               <tr key={order.id} className={cn("border-b border-gray-100 last:border-0", selectedIds.has(order.id) && "bg-primary-50/30")}>
                 <td className="px-3.5 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(order.id)}
-                    onChange={() => onToggleSelect(order.id)}
-                    aria-label={`Selecionar pedido de ${customer?.name ?? "cliente"}`}
-                    className="h-3.5 w-3.5 rounded border-gray-300"
-                  />
+                  {/* Pedido terminal não entra na seleção — ver canSelectOrder. */}
+                  {canSelectOrder(order) && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(order.id)}
+                      onChange={() => onToggleSelect(order.id)}
+                      aria-label={`Selecionar pedido de ${customer?.name ?? "cliente"}`}
+                      className="h-3.5 w-3.5 rounded border-gray-300"
+                    />
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">
                   {formatDate(order.date)}
+                  {/*
+                    Data da entrega embaixo da data do pedido, em vez de numa coluna nova:
+                    a tabela já tem nove colunas e uma décima, preenchida em menos de
+                    metade das linhas, empurraria o total para fora da tela.
+                  */}
+                  {order.deliveredAt && (
+                    <span className="mt-0.5 block text-[11px] font-bold text-success-700">
+                      Entregue em {formatDateTime(order.deliveredAt)}
+                    </span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-bold text-gray-900">{customer?.name ?? "—"}</td>
                 <td className="whitespace-nowrap px-3.5 py-3 font-semibold text-gray-500">

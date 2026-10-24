@@ -1,0 +1,11 @@
+-- Quando a entrega do pedido de fato aconteceu.
+--
+-- Não dá para derivar de `order_status_history`: lá o `changed_at` é gravado quando o
+-- servidor soube da mudança. Uma entrega registrada em galpão sem sinal sobe pela fila
+-- offline horas depois, e o histórico marcaria o horário da sincronização como se fosse
+-- o da entrega.
+--
+-- O app já carrega o `occurredAt` do evento justamente para preservar esse horário; esta
+-- coluna é onde ele para de se perder. Fica nula para pedidos que nunca foram entregues
+-- e para os entregues antes desta migração — nesses, o dado nunca foi registrado.
+ALTER TABLE orders ADD COLUMN delivered_at TIMESTAMPTZ;

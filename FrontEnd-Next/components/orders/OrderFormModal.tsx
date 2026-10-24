@@ -58,6 +58,13 @@ interface OrderFormModalProps {
   paymentConditions: PaymentCondition[];
   onClose: () => void;
   onSubmit: (data: OrderFormData) => void;
+  /**
+   * Abre só para consulta. A partir de faturado o pedido entrou na operação — pode estar
+   * numa rota, pode ter saído com o caminhão — e alterar itens ou valores reescreveria o
+   * passado. Mas continuar podendo **ver** o pedido importa, então em vez de bloquear a
+   * abertura a tela abre travada.
+   */
+  readOnly?: boolean;
 }
 
 export function OrderFormModal({
@@ -70,6 +77,7 @@ export function OrderFormModal({
   paymentConditions,
   onClose,
   onSubmit,
+  readOnly = false,
 }: OrderFormModalProps) {
   const isEditing = order !== null;
   const [activeTab, setActiveTab] = useState<Tab>("cliente");
@@ -136,7 +144,18 @@ export function OrderFormModal({
   }
 
   return (
-    <Modal title={isEditing ? "Editar pedido" : "Novo pedido"} onClose={onClose} size="lg">
+    <Modal
+      title={readOnly ? "Pedido" : isEditing ? "Editar pedido" : "Novo pedido"}
+      onClose={onClose}
+      size="lg"
+    >
+      {readOnly && (
+        <div className="border-b border-warning-200 bg-warning-50 px-6 py-3 text-[12.5px] font-semibold leading-relaxed text-warning-700">
+          Este pedido já foi faturado e não pode mais ser alterado. A partir do faturamento ele entra
+          na operação — pode estar numa rota ou já ter saído —, e mudar itens ou valores reescreveria
+          o que aconteceu.
+        </div>
+      )}
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="flex flex-col">
         <div className="grid grid-cols-3 border-b border-gray-100 px-6">
           <TabButton label="Cliente" active={activeTab === "cliente"} hasError={clientHasError} onClick={() => setActiveTab("cliente")} />
@@ -149,7 +168,13 @@ export function OrderFormModal({
           />
         </div>
 
-        <div className="flex flex-col gap-4 px-6 py-5">
+        {/*
+          `fieldset disabled` trava todos os campos de uma vez, pelo próprio HTML — não
+          precisa espalhar `disabled` por dezenas de inputs nem lembrar de cada um novo.
+          Fica só em volta do corpo: as abas continuam clicáveis, senão consultar um
+          pedido entregue mostraria apenas a primeira aba.
+        */}
+        <fieldset disabled={readOnly} className="flex flex-col gap-4 border-0 px-6 py-5">
           {activeTab === "cliente" && (
             <>
               <Controller
@@ -463,15 +488,17 @@ export function OrderFormModal({
               )}
             </>
           )}
-        </div>
+        </fieldset>
 
         <div className="flex justify-end gap-2.5 border-t border-gray-100 px-6 py-4">
           <Button type="button" variant="secondary" className="w-auto" onClick={onClose}>
-            Cancelar
+            {readOnly ? "Fechar" : "Cancelar"}
           </Button>
-          <Button type="submit" className="w-auto">
-            Salvar pedido
-          </Button>
+          {!readOnly && (
+            <Button type="submit" className="w-auto">
+              Salvar pedido
+            </Button>
+          )}
         </div>
       </form>
     </Modal>

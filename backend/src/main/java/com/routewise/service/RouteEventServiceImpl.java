@@ -126,7 +126,9 @@ public class RouteEventServiceImpl implements IRouteEventService {
     // retornou mais acima, pelo clientEventId, sem chegar aqui. E uma segunda entrega
     // registrada à mão na web encontra o pedido já em `entregue` e é ignorada.
     if ("entrega".equals(type) && request.stopIndex() != null) {
-      orderLifecycle.onDelivered(route, request.stopIndex());
+      // `entity.getOccurredAt()` e não `now()`: é o horário em que a entrega aconteceu no
+      // celular, que a fila offline preservou até aqui.
+      orderLifecycle.onDelivered(route, request.stopIndex(), entity.getOccurredAt());
     }
 
     return saved;

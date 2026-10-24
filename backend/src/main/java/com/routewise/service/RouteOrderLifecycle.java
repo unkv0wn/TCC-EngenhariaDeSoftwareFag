@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -79,10 +80,16 @@ public class RouteOrderLifecycle {
     move(stopResolver.allOrderIds(route), FATURADO, EM_ROTA, "rota criada", route.getId());
   }
 
-  /** Entrega registrada numa parada: só os pedidos daquela parada fecham. */
-  public void onDelivered(SavedRoute route, int stopIndex) {
+  /**
+   * Entrega registrada numa parada: só os pedidos daquela parada fecham.
+   *
+   * <p>{@code occurredAt} é o horário do evento, não o de agora. O motorista registra em
+   * galpão sem sinal e a fila sobe depois; usar o instante da sincronização carimbaria a
+   * entrega numa hora em que o caminhão já tinha ido embora.
+   */
+  public void onDelivered(SavedRoute route, int stopIndex, Instant occurredAt) {
     List<UUID> orderIds = stopResolver.orderIdsByStop(route).getOrDefault(stopIndex, List.of());
-    move(orderIds, EM_ROTA, ENTREGUE, "entrega na parada " + stopIndex, route.getId());
+    move(orderIds, EM_ROTA, ENTREGUE, "entrega na parada " + stopIndex, route.getId(), occurredAt);
   }
 
   /**
@@ -106,6 +113,17 @@ public class RouteOrderLifecycle {
    * {@code orderIds}), e caso normal não se trata por exceção.
    */
   private void move(List<UUID> orderIds, String from, String to, String reason, UUID routeId) {
+    move(orderIds, from, to, reason, routeId, Instant.now());
+  }
+
+  private void move(
+    List<UUID> orderIds,
+    String from,
+    String to,
+    String reason,
+    UUID routeId,
+    Instant occurredAt
+  ) {
     if (orderIds.isEmpty()) {
       return;
     }
@@ -125,7 +143,7 @@ public class RouteOrderLifecycle {
       }
 
       try {
-        orderService.changeStatus(orderId, to);
+        orderService.changeStatus(orderId, to, occurredAt);
         moved++;
       } catch (InvalidOrderStatusTransitionException ex) {
         // Não deveria acontecer — o estado foi conferido logo acima. Se acontecer, é

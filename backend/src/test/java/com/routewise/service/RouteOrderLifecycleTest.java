@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,6 +34,12 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 class RouteOrderLifecycleTest {
+
+  /**
+   * Horário da entrega como o motorista a registrou — bem antes de "agora", que é o caso
+   * da entrega feita sem sinal e sincronizada depois.
+   */
+  private static final Instant DELIVERED_AT = Instant.parse("2026-10-23T11:30:00Z");
 
   private static final UUID STOP1_ORDER = UUID.fromString("11111111-1111-1111-1111-111111111111");
   private static final UUID STOP2_ORDER_A = UUID.fromString("22222222-2222-2222-2222-222222222221");
@@ -78,9 +85,9 @@ class RouteOrderLifecycleTest {
 
     lifecycle.onRouteCreated(route);
 
-    verify(orderService).changeStatus(STOP1_ORDER, "em_rota");
-    verify(orderService).changeStatus(STOP2_ORDER_A, "em_rota");
-    verify(orderService, never()).changeStatus(eq(STOP2_ORDER_B), any());
+    verify(orderService).changeStatus(eq(STOP1_ORDER), eq("em_rota"), any());
+    verify(orderService).changeStatus(eq(STOP2_ORDER_A), eq("em_rota"), any());
+    verify(orderService, never()).changeStatus(eq(STOP2_ORDER_B), any(), any());
   }
 
   @Test
@@ -91,12 +98,14 @@ class RouteOrderLifecycleTest {
     givenOrder(STOP2_ORDER_A, "em_rota");
     givenOrder(STOP2_ORDER_B, "em_rota");
 
-    lifecycle.onDelivered(route, 2);
+    lifecycle.onDelivered(route, 2, DELIVERED_AT);
 
-    verify(orderService).changeStatus(STOP2_ORDER_A, "entregue");
-    verify(orderService).changeStatus(STOP2_ORDER_B, "entregue");
+    // O horário repassado é o do evento, não o de agora: é o que faz a data de entrega
+    // sobreviver a um registro feito sem sinal e sincronizado horas depois.
+    verify(orderService).changeStatus(STOP2_ORDER_A, "entregue", DELIVERED_AT);
+    verify(orderService).changeStatus(STOP2_ORDER_B, "entregue", DELIVERED_AT);
     // O pedido da parada 1 não foi entregue — este é o erro que custaria caro.
-    verify(orderService, never()).changeStatus(eq(STOP1_ORDER), any());
+    verify(orderService, never()).changeStatus(eq(STOP1_ORDER), any(), any());
   }
 
   @Test
@@ -105,9 +114,9 @@ class RouteOrderLifecycleTest {
     givenTwoStops();
     givenOrder(STOP1_ORDER, "entregue");
 
-    lifecycle.onDelivered(route, 1);
+    lifecycle.onDelivered(route, 1, DELIVERED_AT);
 
-    verify(orderService, never()).changeStatus(any(), any());
+    verify(orderService, never()).changeStatus(any(), any(), any());
   }
 
   @Test
@@ -115,7 +124,7 @@ class RouteOrderLifecycleTest {
   void deliveryOnStopWithoutOrders() {
     givenTwoStops();
 
-    lifecycle.onDelivered(route, 7);
+    lifecycle.onDelivered(route, 7, DELIVERED_AT);
 
     verifyNoInteractions(orderService);
   }
@@ -130,10 +139,10 @@ class RouteOrderLifecycleTest {
 
     lifecycle.onRouteClosed(route, "rota encerrada");
 
-    verify(orderService).changeStatus(STOP2_ORDER_A, "faturado");
-    verify(orderService).changeStatus(STOP2_ORDER_B, "faturado");
+    verify(orderService).changeStatus(eq(STOP2_ORDER_A), eq("faturado"), any());
+    verify(orderService).changeStatus(eq(STOP2_ORDER_B), eq("faturado"), any());
     // Entregue não volta para a fila — seria desfazer uma entrega que aconteceu.
-    verify(orderService, never()).changeStatus(eq(STOP1_ORDER), any());
+    verify(orderService, never()).changeStatus(eq(STOP1_ORDER), any(), any());
   }
 
   @Test
@@ -157,8 +166,8 @@ class RouteOrderLifecycleTest {
 
     lifecycle.onRouteCreated(route);
 
-    verify(orderService).changeStatus(STOP2_ORDER_A, "em_rota");
-    verify(orderService).changeStatus(STOP2_ORDER_B, "em_rota");
-    verify(orderService, never()).changeStatus(eq(STOP1_ORDER), any());
+    verify(orderService).changeStatus(eq(STOP2_ORDER_A), eq("em_rota"), any());
+    verify(orderService).changeStatus(eq(STOP2_ORDER_B), eq("em_rota"), any());
+    verify(orderService, never()).changeStatus(eq(STOP1_ORDER), any(), any());
   }
 }
