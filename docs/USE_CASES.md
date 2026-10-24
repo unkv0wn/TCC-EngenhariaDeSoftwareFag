@@ -15,7 +15,8 @@ watch the result. That flow survives as UC-05 and UC-06, but it is no longer the
 system. The operation now starts at a registration screen and ends on a driver's phone.
 
 The use cases below follow the real path of a delivery: register → order → invoice →
-route → dispatch → execute → track.
+route → dispatch → execute → track. UC-11 steps outside that line: it is how a system other
+than RouteWise reads the result.
 
 ---
 
@@ -25,6 +26,7 @@ route → dispatch → execute → track.
 |-------|------|-------------|
 | **Manager** (gestor) | Human | Runs the operation from the web dashboard: registrations, orders, routes, tracking. |
 | **Driver** (motorista) | Human | Executes the route in the field with the Android app. |
+| **External system** (integração) | System | Third-party client that reads orders, routes and deliveries with a credentialed token. |
 | **Web frontend** | System | Next.js application; the manager's entire interface. |
 | **Driver app** | System | Flutter application; opens one route by token and registers field events. |
 | **Backend** | System | Spring Boot; owns the data, the solver and the API. |
@@ -91,6 +93,8 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 |------|---------|-----------------|
 | 3a | Quantity or price invalid | Zod validation blocks the submission and marks the field. |
 | 5a | Items exceed the selected vehicle's capacity | The screen warns but does not block: the manager may split the load later. |
+| 6a | The manager reopens an order already past `aguardando` | The form opens read-only, with a banner saying why, and the backend refuses an update anyway: from `faturado` on the order is committed to a route, and changing its items would silently disagree with what the driver is carrying. |
+| 6b | The manager tries to select a delivered or cancelled order for a new route | The selection checkbox is not offered — the order is in a terminal state and composing a route from it would mean nothing. |
 
 **Post-conditions:**
 - An order exists in `aguardando`, invisible to route generation until invoiced.
@@ -251,16 +255,16 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 
 **Pre-conditions:**
 - The manager created an app account for the driver and registered this phone's identifier on it.
-- The driver received the link, or the route's code.
+- A route is assigned to the driver. He does **not** need to have received anything: the home screen lists his routes.
 
 **Main Flow:**
 1. The driver opens the app and signs in with username and password; the app sends this phone's identifier along with them.
 2. The backend checks the password (BCrypt) and that the identifier is the one registered for the account, and returns a session token. The app stores the session, so later launches skip this step.
-3. The driver scans the QR code, follows the link, or types the code.
-4. The app requests `GET /api/mobile/routes/{code}`, carrying the session.
-5. The backend returns the route, the stops already matched to customers and numbered, and the events so far — with no internal identifiers.
-6. The app shows the day's route: departure, vehicle with capacity, progress, next stop highlighted and the full stop list.
-7. The code is stored, so the next launch opens the route directly.
+3. The app lands on the home screen and lists the driver's own routes (`GET /api/mobile/routes`): the open ones first, a short history of concluded ones below, each with date, departure, vehicle, order count, distance and delivery progress.
+4. The driver taps the route he is starting. He may instead use "Abrir por código" and scan the QR, follow the link or type the code — the path for a route just assigned that the list has not picked up yet.
+5. The app requests `GET /api/mobile/routes/{code}`, carrying the session.
+6. The backend returns the route, the stops already matched to customers and numbered, and the events so far — with no internal identifiers.
+7. The app shows the day's route: departure, vehicle with capacity, progress, next stop highlighted and the full stop list. Going back returns to the home screen, where the list is refreshed.
 
 **Alternative Flows:**
 
@@ -270,12 +274,15 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 | 1b | Correct credentials, phone not the registered one | HTTP 403 telling the driver to contact the manager; the app shows this phone's identifier, with a copy button, so he can send it. |
 | 1c | Account has no registered device yet | HTTP 403 with the same instruction — no phone can sign in to that account until the manager registers one. |
 | 1d | Account blocked by the manager | HTTP 403 saying the access is blocked. |
-| 4a | Unknown or revoked code | HTTP 404 and a message asking for a new link; the stored code is cleared. |
-| 4b | No connectivity, with a route previously loaded | The app keeps showing the loaded route rather than an empty screen. |
-| 4c | Session expired or revoked mid-day | HTTP 401; the app returns to the login screen. The offline queue is **not** cleared — unsent field records survive the sign-out. |
+| 3a | No route assigned to him | The home screen says so and points at the code button, instead of showing an empty list that reads like a failure. |
+| 3b | The list cannot be loaded | The error is shown with a "try again", and pulling down retries. |
+| 4a | Unknown or revoked code | HTTP 404 and a message asking for a new link. |
+| 4b | **Code of another driver's route** | HTTP 404 — identical to an unknown code. Telling him the route exists but is not his would hand any app an oracle for discovering valid codes. The manager has to reassign the route first. |
+| 4c | No connectivity, with a route previously loaded | The app keeps showing the loaded route rather than an empty screen. |
+| 4d | Session expired or revoked mid-day | HTTP 401; the app returns to the login screen. The offline queue is **not** cleared — unsent field records survive the sign-out. |
 
 **Post-conditions:**
-- The driver sees exactly one route — his own.
+- The driver sees his own routes, and only his own.
 - The account's last login is recorded.
 
 ---
@@ -310,7 +317,8 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 
 **Post-conditions:**
 - The event is recorded once, attributed to the driver, and visible on the manager's tracking screen.
-- The orders of that stop read `entregue`, with the transition in their own status history.
+- The orders of that stop read `entregue`, with the transition in their own status history and the
+  delivery instant taken from the event itself, not from when the server processed it.
 
 ---
 
@@ -336,3 +344,42 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 **Post-conditions:**
 - The refuelling history can feed the empirical fuel-consumption analysis under
   `com.routewise.validation`.
+
+---
+
+## UC-11 — Give an External System Read Access
+
+**ID:** UC-11
+**Actors:** Manager, Web frontend, External system, Backend
+**Source Stories:** US-21
+
+**Pre-conditions:**
+- The manager knows which data the external system needs. Scope is granted per area, not all at once.
+
+**Main Flow:**
+1. The manager opens `/dashboard/integracoes` and creates a credential, naming the system and ticking the scopes it may read (orders, routes, deliveries).
+2. The backend generates the client identifier and the secret, stores the secret only as a BCrypt hash, and returns it in clear in that one response.
+3. The screen shows the secret once, with a copy button and a warning that it will not be shown again. Closing the dialog is the end of its existence in readable form.
+4. The manager sends the pair to whoever operates the external system.
+5. The external system posts the pair to `/api/integration/token` and receives a short-lived token carrying its scopes.
+6. It calls `GET /api/integration/orders`, `/routes` or `/deliveries` with that token.
+7. The backend checks the token, checks that it holds the scope the path requires, and answers with the integration's own contract — not the panel's shapes.
+8. Every call, accepted or refused, is written to the access log the manager reads on the same screen.
+
+**Alternative Flows:**
+
+| Code | Trigger | System Response |
+|------|---------|-----------------|
+| 3a | The manager loses the secret | "Gerar novo segredo" issues another and invalidates the previous one on the spot; whoever was using it stops working until they receive the new one. There is no recovery path — the secret is not stored. |
+| 5a | Wrong secret, or a client identifier that does not exist | HTTP 401 with the same response in both cases: distinguishing them would confirm which identifiers exist. The attempt is logged with the identifier that was tried. |
+| 6a | Token carries a scope the path does not require, or none of it | HTTP 403. The data is not served and the refusal is logged. |
+| 6b | The path has no scope mapped on the server | HTTP 403 — denied by omission. An endpoint nobody mapped shows up as a defect instead of serving data with no scope at all. |
+| 6c | A driver or panel token is presented | HTTP 401. All three token kinds are signed with the same secret, so each carries a `typ` claim and each parser refuses the others. |
+| 6d | The credential was revoked or deleted after the token was issued | HTTP 403 on the next call, reported the same way in the response and in the log. |
+| 8a | The manager deletes the credential | Access is cut immediately; the log of what it already accessed stays, now ownerless, because the record of a past access is the part worth keeping. |
+
+**Post-conditions:**
+- The external system reads only the areas it was granted, and only for reading.
+- The manager can see, on one screen, every access and every refusal — including attempts with an identifier matching no credential.
+
+**Out of scope:** external writes. An ERP creating an order brings validation and idempotency questions that deserve their own decision, and were deliberately left out.

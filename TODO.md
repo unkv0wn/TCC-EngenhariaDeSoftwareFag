@@ -3,7 +3,7 @@
 Sequência de construção e decisões já tomadas. O inventário do que existe hoje é o
 `docs/ESTADO-ATUAL.md`; aqui ficam o que falta e o porquê das escolhas.
 
-**Atualizado em:** 2026-10-21.
+**Atualizado em:** 2026-10-24.
 
 ## Fluxo de negócio
 
@@ -51,16 +51,28 @@ nasce com `driverId` e `vehicleId`.
    - [x] Registrar chegada/entrega/ocorrência, com fila offline por rota
    - [x] Encerrar a rota no fim do dia
    - [x] Login obrigatório com usuário, senha e aparelho cadastrado
+   - [x] Tela inicial com as rotas do próprio motorista — ele começa o dia sem depender
+     de o gestor lhe mandar nada
+   - [x] Rota alheia recusada mesmo com o código na mão
 5. **Integração**
    - [x] Ciclo do pedido fechado — a entrega em campo fecha o pedido
      (`RouteOrderLifecycle`)
+   - [x] Data e hora da entrega no pedido (`delivered_at`), vinda do próprio evento de campo
+   - [x] Pedido travado pra edição a partir de `faturado` — entregue é estado final
+   - [x] API de integração para terceiros: credencial com segredo em BCrypt, token por
+     client-credentials, escopo por caminho, três endpoints de leitura
+     (pedidos, rotas, entregas) e registro de toda chamada
+   - [x] Tela do gestor para criar/revogar credencial, gerar novo segredo e ler o registro
+     de acesso (`/dashboard/integracoes`)
+   - [x] Segredo do JWT fora do código, em `JWT_SECRET` (`.env` versionado só como exemplo)
 
 ## Em aberto
 
 Em ordem de valor, na avaliação atual:
 
 1. **Autenticação real no painel.** Hoje `/api/auth/login` emite token pra qualquer e-mail, sem
-   senha, e todo `/api/**` fora de `/api/mobile/**` responde sem autenticação — inclusive
+   senha, e todo `/api/**` fora de `/api/mobile/**` e `/api/integration/**` responde sem
+   autenticação — inclusive `/api/api-clients`, que cria credencial de integração, e
    `/api/mobile-users`, que concede acesso ao app. A trava de aparelho do app tem uma porta aberta
    ao lado. Enquanto a 8080 só é alcançável na LAN, é problema contido; para o texto do TCC,
    "autenticação simplificada, fora do escopo" é posição defensável desde que **escrita**.
@@ -70,11 +82,12 @@ Em ordem de valor, na avaliação atual:
    celular não autorizado — o evento que o cadastro de aparelho existe pra impedir — não aparece em
    lugar nenhum. Desenho já discutido: tabela append-only com o desfecho de cada tentativa, FK
    anulável pra sobreviver à exclusão do acesso, e gravação em transação separada (senão a recusa
-   lança e desfaz o próprio log).
+   lança e desfaz o próprio log). Esse desenho agora existe construído em outro lugar:
+   `integration_request_log`, com a FK anulável e o `REQUIRES_NEW` — serve de molde.
 3. **Mapa da rota no app** (`route_map_screen.dart`). Previsto no spec e não construído. A
    geometria já vem pronta no `result` da rota — é tela de leitura, não precisa de serviço novo. O
    item mais barato da lista.
-4. **Testes de controller e repositório.** Os 63 testes do backend cobrem A*, as calculadoras
+4. **Testes de controller e repositório.** Os 68 testes do backend cobrem A*, as calculadoras
    empíricas e o ciclo do pedido. CRUD e máquinas de status — o que muda mais — não têm rede de
    proteção. Precisaria de Testcontainers ou Postgres de teste, que não estão montados.
 5. **Modo escuro de verdade.** Nenhum componente usa `dark:`; o escuro só repinta o `body`.
@@ -113,4 +126,17 @@ Em ordem de valor, na avaliação atual:
 - Os pedidos saem de `faturado` na **criação** da rota, não quando o caminhão sai: a tela de gerar
   rota oferece justamente os faturados, e deixá-los lá permitiria o mesmo pedido entrar em duas
   rotas. Ver `RouteOrderLifecycle`.
+- A integração é **só leitura**. Escrita externa — um ERP criando pedido — traz validação e
+  idempotência (o que acontece quando o mesmo pedido chega duas vezes?) que merecem decisão
+  própria, e não entraram.
+- A integração usa client-credentials com token curto, não chave de API longa: chave vazada
+  funciona até alguém notar, enquanto aqui o que viaja por chamada é um token que expira sozinho e
+  revogar o cliente corta o próximo. O preço é que o escopo vai **dentro** do token e só muda na
+  renovação — por isso a validade é curta.
+- Caminho de integração sem escopo mapeado é recusado com 403, não liberado. Negar por omissão faz
+  um endpoint novo que ninguém mapeou aparecer como defeito, em vez de servir dado sem escopo.
+- O registro de acesso da integração é gravado em transação separada (`REQUIRES_NEW`): recusa é
+  sinalizada por exceção, e o rollback apagaria justamente as linhas que importam.
+- A integração tem DTOs próprios, não os do painel: o que sai é contrato prometido a terceiro, e
+  reusar as formas internas tornaria cada refatoração uma quebra pra quem integrou.
 - `frontend/` é protótipo congelado — não recebe feature nova.

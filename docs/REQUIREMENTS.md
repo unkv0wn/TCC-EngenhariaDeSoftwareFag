@@ -3,7 +3,7 @@
 > **Type:** Academic Full-Stack Application (TCC)
 > **Domain:** Urban Logistics / Fleet Management
 > **First issued:** 2026-04-14
-> **Revised:** 2026-10-14 — rewritten against the implemented system
+> **Revised:** 2026-10-24 — rewritten against the implemented system
 > **Status:** ACTIVE
 
 ---
@@ -13,8 +13,9 @@
 The 2026-04-14 version of this document described a single-purpose, stateless route
 optimizer: place 2–10 pins on a map, get the best visiting order back. That core still
 exists and is still the heart of the project, but the system around it grew into a small
-fleet-management application with two distinct users — the **manager**, who runs the
-operation from a browser, and the **driver**, who executes the route from a phone.
+fleet-management application with three distinct consumers — the **manager**, who runs the
+operation from a browser, the **driver**, who executes the route from a phone, and an
+**external system**, which reads data through a credentialed integration API.
 
 This revision describes what is actually built. Requirements that the implementation
 contradicted were corrected, not quietly dropped; the most consequential is the ordering
@@ -29,6 +30,7 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 |-------|-------|---------------|
 | **Manager** (gestor) | `FrontEnd-Next/` web dashboard | Login screen exists; not enforced by the backend — see "Known gaps" |
 | **Driver** (motorista) | `mobile/` Android app | Yes: username + password (BCrypt) and the phone must be the one the manager enrolled. The route itself is then opened by a per-route code |
+| **External system** (integração) | any HTTP client | Yes: a client credential traded for a short-lived token, which carries the scopes it may read |
 
 ---
 
@@ -73,6 +75,12 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 | US-18 | Driver   | Be guided to the next stop                                       | I use the navigation app I already know                          |
 | US-19 | Driver   | Register arrival, delivery and incidents where they happen       | The office sees what happened without me phoning in              |
 | US-20 | Driver   | Register events with no signal                                   | Delivering in a shed or basement does not lose the record        |
+
+### Integration (manager)
+
+| ID    | As a…    | I want to…                                                      | So that…                                                        |
+|-------|----------|-----------------------------------------------------------------|-----------------------------------------------------------------|
+| US-21 | Manager  | Give an external system a credential that reads my orders, routes and deliveries | The company's other systems stop depending on someone exporting data by hand |
 
 ---
 
@@ -124,12 +132,18 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 - [x] A delivery in the field closes the orders of that stop, and only of that stop
 - [x] Concluding or deleting a route returns undelivered orders to the pool
 - [x] The automatic transitions appear in the order's own status history
+- [x] An order is editable only while `aguardando` — from `faturado` on it is committed to a route
+- [x] A delivered order cannot be edited, nor selected to compose a new route
+- [x] The order records when it was delivered, taken from the field event itself
 
 ### Driver app
 - [x] Sign-in with username, password and a device the manager registered
 - [x] The login screen shows this phone's identifier, so the manager can register it
 - [x] An unregistered phone cannot sign in, even with the right password
 - [x] `/api/mobile/**` refuses calls without a driver session
+- [x] Home screen listing the driver's own routes, open ones first, with delivery progress
+- [x] Tapping a route opens it; the QR/code path remains for a route not yet listed
+- [x] A driver cannot read or write another driver's route, even holding its code
 - [x] Stops are numbered identically to the manager's map
 - [x] Arrival, delivery and incident are registered from the stop screen
 - [x] Events survive being registered with no connectivity and sync afterwards
@@ -137,10 +151,23 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 - [x] Signing out keeps the offline queue — unsent field records are not lost
 - [ ] Route map screen — **not done**
 
+### Integration
+- [x] The manager creates a credential, picks its scopes, and sees the secret exactly once
+- [x] The secret is stored only hashed; losing it means generating another, never recovering it
+- [x] A client trades its credential for a short-lived token and reads with that token
+- [x] A scope that was not granted is refused, and a path with no scope mapped is refused too
+- [x] An integration token does not work on the driver surface, nor a driver token on the integration
+- [x] Revoking or deleting a credential cuts access on the next request
+- [x] Every call, accepted or refused, appears in the manager's access log — including attempts with
+      an identifier that matches no credential
+- [x] The log survives deletion of the credential it refers to
+- [ ] External writes (an ERP creating an order) — **out of scope by decision**
+
 ### Quality
 - [x] No business logic in the frontends — both consume the same API
 - [x] Backend response under 5 s for the practical waypoint ceiling
 - [x] Automated tests for the order lifecycle (stop↔order matching and propagation)
+- [x] Automated test pinning that a scope nobody granted cannot be read out of a similar one
 - [ ] Automated tests for controllers and repositories — **not done**
 - [ ] Manager authentication enforced — **not done** (see below)
 - [ ] A screen showing app login attempts — **not done** (see below)
@@ -155,12 +182,16 @@ These are stated here rather than hidden, because they bound what the system can
    e-mail and validates no password; every endpoint outside `/api/mobile/**` is reachable
    unauthenticated. The guard lives in the Next.js proxy and protects pages, not data.
    The driver surface is the exception — it is genuinely enforced.
-2. **That asymmetry has a sharp edge.** `/api/mobile-users`, which grants app access, sits
+2. **That asymmetry has a sharp edge.** `/api/mobile-users`, which grants app access, and
+   `/api/api-clients`, which creates integration credentials, both sit
    on the unauthenticated side. Whoever reaches port 8080 can create an account and
-   register their own phone, so the device binding holds only as far as the network does.
-3. **The route code is a bearer secret**, not authentication: whoever holds the link can
-   select that route — but since the driver surface requires a session, holding the code
-   alone no longer reaches the data.
+   register their own phone, or mint an integration credential for themselves. Both enforced
+   surfaces hold only as far as the network does.
+3. **The route code is no longer a bearer secret.** It selects which route, and the
+   server additionally requires a driver session *and* that the route belong to that
+   driver. Holding the link reaches nothing on its own. The trade-off is that a driver
+   can no longer cover an absent colleague's route with the code alone — the manager has
+   to reassign it.
 4. **Login attempts are not retained.** Only the last successful login is stored; refusals
    reach the application log only. A refused device — the event the binding exists to
    prevent — leaves no trace the manager can read.
