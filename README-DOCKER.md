@@ -7,6 +7,22 @@ instalar Java, Node ou Postgres na máquina.
 
 [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e aberto.
 
+## Antes de subir: o arquivo `.env`
+
+O compose exige a variável `JWT_SECRET` e **não sobe sem ela** — é o segredo que assina o
+token do login, e ele não fica mais no código. Copia o modelo e gera um valor:
+
+```bash
+cp .env.example .env
+```
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+```
+
+Cola o valor gerado no `.env`, na linha `JWT_SECRET=`. O arquivo é ignorado pelo git, então
+cada máquina tem o seu. Trocar o valor depois derruba os logins em aberto — é esperado.
+
 ## Como rodar
 
 Na raiz do projeto (onde está este arquivo):

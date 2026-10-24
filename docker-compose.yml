@@ -29,6 +29,8 @@ services:
       DB_NAME: routewise
       DB_USER: routewise
       DB_PASSWORD: routewise
+      # A mesma do frontend: um assina o token, o outro valida o cookie.
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no ambiente ou num arquivo .env}
     ports:
       - "8080:8080"
     depends_on:
@@ -47,8 +49,11 @@ services:
       # Endpoint que o próprio servidor Next.js usa (dentro da rede docker) pra
       # repassar o login — esse sim usa o nome do serviço.
       BACKEND_URL: http://backend:8080
-      # Precisa ser IDÊNTICA à routewise.jwt.secret do backend (application.properties).
-      JWT_SECRET: ANASKJDJKASHDJKSAHDJKASNDKJSAHDJKSAHDKJSADJKSAHDJKSAHDKJASHDKJSAD
+      # Precisa ser IDÊNTICA à do backend — os dois leem a mesma variável do ambiente.
+      # Não volte a escrever o valor aqui: o repositório é público, e um segredo commitado
+      # torna forjável qualquer token assinado com ele, inclusive a sessão do motorista,
+      # que o MobileAuthFilter aceita pela assinatura.
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no ambiente ou num arquivo .env}
       NODE_ENV: production
     ports:
       - "3000:3000"
