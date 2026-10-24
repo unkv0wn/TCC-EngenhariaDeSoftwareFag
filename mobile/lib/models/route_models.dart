@@ -9,6 +9,70 @@ library;
 /// Depois dele o servidor recusa evento novo, então a tela esconde o que registraria.
 const String routeStatusFinished = 'concluida';
 
+/// Rota ainda não iniciada: o caminhão não saiu.
+const String routeStatusPlanned = 'planejada';
+
+/// Rota em andamento.
+const String routeStatusInProgress = 'em_rota';
+
+/// Uma rota como ela aparece na lista da tela inicial.
+///
+/// Magra de propósito — o espelho de `MobileRouteSummaryDto`. Carregar a rota inteira
+/// (paradas, eventos, snapshot do A*) para preencher um cartão de seis campos multiplicaria
+/// o peso pelo número de rotas, em cima de rede de campo.
+class RouteSummary {
+  const RouteSummary({
+    required this.accessCode,
+    required this.createdAt,
+    required this.status,
+    required this.departureTime,
+    required this.ordersCount,
+    required this.totalStops,
+    required this.deliveredStops,
+    required this.totalDistanceKm,
+    required this.totalDurationMin,
+    required this.vehiclePlate,
+    required this.vehicleModel,
+  });
+
+  final String accessCode;
+  final DateTime createdAt;
+  final String status;
+  final String departureTime;
+  final int ordersCount;
+  final int totalStops;
+  final int deliveredStops;
+  final double totalDistanceKm;
+  final double totalDurationMin;
+  final String? vehiclePlate;
+  final String? vehicleModel;
+
+  bool get isFinished => status == routeStatusFinished;
+
+  /// Em aberto: ainda dá para trabalhar nela. É o que a tela inicial põe em destaque.
+  bool get isOpen => !isFinished;
+
+  /// Fração entregue, de 0 a 1. Rota sem parada devolve 0 em vez de estourar — rota assim
+  /// não deveria existir, mas a tela não é lugar de descobrir isso.
+  double get progress => totalStops == 0 ? 0 : deliveredStops / totalStops;
+
+  factory RouteSummary.fromJson(Map<String, dynamic> json) {
+    return RouteSummary(
+      accessCode: json['accessCode'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      status: json['status'] as String,
+      departureTime: json['departureTime'] as String? ?? '',
+      ordersCount: (json['ordersCount'] as num?)?.toInt() ?? 0,
+      totalStops: (json['totalStops'] as num?)?.toInt() ?? 0,
+      deliveredStops: (json['deliveredStops'] as num?)?.toInt() ?? 0,
+      totalDistanceKm: (json['totalDistanceKm'] as num?)?.toDouble() ?? 0,
+      totalDurationMin: (json['totalDurationMin'] as num?)?.toDouble() ?? 0,
+      vehiclePlate: json['vehiclePlate'] as String?,
+      vehicleModel: json['vehicleModel'] as String?,
+    );
+  }
+}
+
 class MobileRoute {
   const MobileRoute({
     required this.accessCode,

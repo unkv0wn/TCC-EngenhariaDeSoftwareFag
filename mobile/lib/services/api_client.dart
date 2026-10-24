@@ -78,26 +78,62 @@ class ApiClient {
   }) async {
     final body = jsonEncode({'username': username, 'password': password, 'deviceId': deviceId});
     final response = await _post('/api/mobile/auth/login', body);
-    final json = jsonDecode(response) as Map<String, dynamic>;
 
-    return DriverSession(
-      token: json['token'] as String,
-      driverId: json['driverId'] as String,
-      driverName: json['driverName'] as String? ?? '',
-      username: json['username'] as String? ?? username,
+    return _parse(() {
+      final json = jsonDecode(response) as Map<String, dynamic>;
+      return DriverSession(
+        token: json['token'] as String,
+        driverId: json['driverId'] as String,
+        driverName: json['driverName'] as String? ?? '',
+        username: json['username'] as String? ?? username,
+      );
+    });
+  }
+
+  /// As rotas deste motorista — quem ele é vem do token, não desta chamada.
+  ///
+  /// O servidor devolve as em aberto e o histórico recente; o app não filtra nada, para
+  /// não haver duas regras de "o que aparece na lista" podendo divergir.
+  Future<List<RouteSummary>> fetchMyRoutes() async {
+    final response = await _get('/api/mobile/routes');
+    return _parse(
+      () => (jsonDecode(response) as List<dynamic>)
+          .map((item) => RouteSummary.fromJson(item as Map<String, dynamic>))
+          .toList(),
     );
+  }
+
+  /// Converte falha de leitura da resposta em [ApiException].
+  ///
+  /// Sem isto, um campo inesperado no JSON vira `TypeError` — que não é `ApiException` e
+  /// escapa do `catch` de toda tela. Foi assim que uma rota antiga sem código de acesso
+  /// deixou a tela inicial girando para sempre: a exceção subia, o `setState` nunca
+  /// rodava, e o motorista ficava olhando um carregamento eterno sem nenhuma saída.
+  ///
+  /// A resposta do servidor é a fronteira certa para essa tradução: daqui para dentro,
+  /// toda falha de rede ou de contrato tem o mesmo tipo, e as telas só precisam tratá-lo.
+  T _parse<T>(T Function() read) {
+    try {
+      return read();
+    } on Exception {
+      throw ApiException('O servidor respondeu em um formato inesperado.');
+    } on TypeError {
+      // TypeError é Error, não Exception — precisa do seu próprio catch, senão passa
+      // direto e é exatamente o caso que originou este método.
+      throw ApiException('O servidor respondeu em um formato inesperado.');
+    }
   }
 
   Future<MobileRoute> fetchRoute(String code) async {
     final response = await _get('/api/mobile/routes/$code');
-    return MobileRoute.fromJson(jsonDecode(response) as Map<String, dynamic>);
+    return _parse(() => MobileRoute.fromJson(jsonDecode(response) as Map<String, dynamic>));
   }
 
   /// Encerra a rota. Idempotente no servidor: repetir depois de uma resposta perdida
   /// devolve a rota já encerrada em vez de erro.
   Future<MobileRoute> finishRoute(String code) async {
     final response = await _post('/api/mobile/routes/$code/finish', '');
-    return MobileRoute.fromJson(jsonDecode(response) as Map<String, dynamic>);
+    return _parse(() => MobileRoute.fromJson(jsonDecode(response) as Map<String, dynamic>));
   }
 
   /// Envia a fila inteira de uma vez. O servidor responde item a item: um evento
@@ -107,19 +143,22 @@ class ApiClient {
 
     final body = jsonEncode(events.map((event) => event.toJson()).toList());
     final response = await _post('/api/mobile/routes/$code/events/batch', body);
-    final results = (jsonDecode(response) as List<dynamic>).cast<Map<String, dynamic>>();
 
-    final accepted = <String>{};
-    final rejected = <String, String>{};
-    for (final result in results) {
-      final id = result['clientEventId'] as String;
-      if (result['accepted'] == true) {
-        accepted.add(id);
-      } else {
-        rejected[id] = result['error'] as String? ?? 'Registro recusado pelo servidor.';
+    return _parse(() {
+      final results = (jsonDecode(response) as List<dynamic>).cast<Map<String, dynamic>>();
+
+      final accepted = <String>{};
+      final rejected = <String, String>{};
+      for (final result in results) {
+        final id = result['clientEventId'] as String;
+        if (result['accepted'] == true) {
+          accepted.add(id);
+        } else {
+          rejected[id] = result['error'] as String? ?? 'Registro recusado pelo servidor.';
+        }
       }
-    }
-    return SyncOutcome(accepted: accepted, rejected: rejected);
+      return SyncOutcome(accepted: accepted, rejected: rejected);
+    });
   }
 
   /// Cabeçalhos comuns. O `Authorization` só entra quando há sessão: o próprio login

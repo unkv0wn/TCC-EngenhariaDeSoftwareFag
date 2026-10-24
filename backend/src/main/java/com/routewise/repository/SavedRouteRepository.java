@@ -13,4 +13,7 @@ public interface SavedRouteRepository extends JpaRepository<SavedRoute, UUID> {
 
   /** Entrada do app do motorista: a rota é encontrada pelo código, nunca pelo id. */
   Optional<SavedRoute> findByAccessCode(String accessCode);
+
+  /** As rotas de um motorista, para a tela inicial do app. */
+  List<SavedRoute> findByDriverIdOrderByCreatedAtDesc(UUID driverId);
 }

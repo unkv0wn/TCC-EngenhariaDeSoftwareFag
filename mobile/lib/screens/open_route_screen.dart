@@ -3,25 +3,30 @@ import 'package:flutter/material.dart';
 import '../models/access_code.dart';
 import '../widgets/access_code_input_formatter.dart';
 import '../services/route_controller.dart';
-import '../services/session_controller.dart';
 import '../theme/app_theme.dart';
-import 'route_summary_screen.dart';
 import 'scan_code_screen.dart';
 
-/// Entrada do app. O caminho normal é o deep link do WhatsApp; o campo de código é o
-/// plano B, para quando o link não abre o app (aparelho sem o app instalado, link
-/// copiado e colado, mensagem encaminhada).
+/// Abrir uma rota pelo código — por QR ou digitado.
+///
+/// Deixou de ser a entrada do app quando a tela inicial passou a listar as rotas do
+/// motorista: hoje ele chega aqui pelo botão da lista, não ao abrir o aplicativo. Serve
+/// para a rota que o gestor acabou de atribuir e ainda não apareceu na lista.
+///
+/// **Devolve o código, não abre a rota.** Quem abre e navega é quem chamou — assim a
+/// pilha de telas fica `inicial → rota`, e voltar da rota leva o motorista de volta à
+/// lista, em vez de passar por esta tela no meio do caminho.
 class OpenRouteScreen extends StatefulWidget {
-  const OpenRouteScreen({
-    super.key,
-    required this.controller,
-    required this.session,
-    this.initialCode,
-  });
+  const OpenRouteScreen({super.key, required this.controller, this.initialCode});
 
   final RouteController controller;
-  final SessionController session;
   final String? initialCode;
+
+  /// Abre a tela e espera o código. `null` se o motorista desistiu.
+  static Future<String?> open(BuildContext context, {required RouteController controller}) {
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => OpenRouteScreen(controller: controller)),
+    );
+  }
 
   @override
   State<OpenRouteScreen> createState() => _OpenRouteScreenState();
@@ -31,28 +36,11 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
   late final TextEditingController _codeField = TextEditingController(
     text: widget.initialCode != null ? AccessCode.format(widget.initialCode!) : '',
   );
-  String? _savedCode;
-
-  @override
-  void initState() {
-    super.initState();
-    _readSavedCode();
-    // A rota salva muda enquanto esta tela existe: encerrar ou trocar de rota volta para
-    // cá, e aí "continuar de onde parei" apontaria para uma rota que já acabou.
-    widget.controller.addListener(_readSavedCode);
-  }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_readSavedCode);
     _codeField.dispose();
     super.dispose();
-  }
-
-  void _readSavedCode() {
-    widget.controller.savedCode().then((code) {
-      if (mounted && code != _savedCode) setState(() => _savedCode = code);
-    });
   }
 
   Future<void> _scan() async {
@@ -60,11 +48,11 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
     if (scanned == null || !mounted) return;
 
     _codeField.text = AccessCode.format(scanned);
-    await _open(scanned);
+    _submit(scanned);
   }
 
-  Future<void> _open(String raw) async {
-    // Normaliza antes de chamar: dá para dizer "código incompleto" sem gastar uma
+  void _submit(String raw) {
+    // Normaliza antes de devolver: dá para dizer "código incompleto" sem gastar uma
     // requisição, o que importa quando o sinal é ruim.
     final code = AccessCode.normalize(raw);
     if (code == null) {
@@ -73,155 +61,85 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
       );
       return;
     }
-
-    await widget.controller.open(code);
-    if (!mounted) return;
-
-    final error = widget.controller.error;
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-      return;
-    }
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RouteSummaryScreen(controller: widget.controller, session: widget.session),
-      ),
-    );
-  }
-
-  /// Sair da conta. Confirma porque entrar de volta depende do gestor ter o aparelho
-  /// cadastrado, e o motorista pode estar na rua sem quem o atenda.
-  Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Sair da conta?'),
-        content: const Text(
-          'Você vai precisar do seu usuário e senha para entrar de novo. '
-          'Os registros que ainda não subiram continuam guardados neste aparelho.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Sair')),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-    await widget.session.signOut();
+    Navigator.of(context).pop(code);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text('Abrir por código')),
       body: ListenableBuilder(
         listenable: widget.controller,
         builder: (context, _) {
           return SafeArea(
-            top: false,
             child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _header(context),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // O caminho principal é a câmera: no pátio, ao lado do computador
-                        // do gestor, ler o QR é mais rápido e não erra. Digitar é o plano B.
-                        FilledButton.icon(
-                          onPressed: widget.controller.isLoading ? null : _scan,
-                          icon: const Icon(Icons.qr_code_scanner, size: 20),
-                          label: const Text('Ler QR Code'),
-                        ),
-                        const SizedBox(height: 18),
-                        const Row(
-                          children: [
-                            Expanded(child: Divider()),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 12),
-                              child: Text(
-                                'ou',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.gray400,
-                                ),
-                              ),
-                            ),
-                            Expanded(child: Divider()),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        const Text(
-                          'Digite o código da rota',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.gray900),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'O gestor vê esse código na mesma tela em que mostra o QR.',
-                          style: TextStyle(fontSize: 12.5, color: AppColors.gray600, height: 1.5),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _codeField,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          textCapitalization: TextCapitalization.characters,
-                          textInputAction: TextInputAction.go,
-                          inputFormatters: [AccessCodeInputFormatter()],
-                          onSubmitted: _open,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.5,
-                          ),
-                          decoration: const InputDecoration(hintText: 'XXXX-XXXX-XXXX'),
-                        ),
-                        const SizedBox(height: 14),
-                        FilledButton(
-                          onPressed: widget.controller.isLoading ? null : () => _open(_codeField.text),
-                          child: widget.controller.isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-                                )
-                              : const Text('Abrir rota'),
-                        ),
-                        if (_savedCode != null) ...[
-                          const SizedBox(height: 24),
-                          const Divider(),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'ÚLTIMA ROTA ABERTA',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.6,
-                              color: AppColors.gray600,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          OutlinedButton.icon(
-                            onPressed: () => _open(_savedCode!),
-                            icon: const Icon(Icons.place_outlined, size: 18),
-                            label: const Text('Continuar de onde parei'),
-                          ),
-                        ],
-                        if (widget.controller.strandedCount > 0) ...[
-                          const SizedBox(height: 20),
-                          _strandedNote(widget.controller.strandedCount),
-                        ],
-                        const SizedBox(height: 24),
-                        _hint(),
-                      ],
-                    ),
+                  // O caminho principal é a câmera: no pátio, ao lado do computador do
+                  // gestor, ler o QR é mais rápido e não erra. Digitar é o plano B.
+                  FilledButton.icon(
+                    onPressed: _scan,
+                    icon: const Icon(Icons.qr_code_scanner, size: 20),
+                    label: const Text('Ler QR Code'),
                   ),
+                  const SizedBox(height: 18),
+                  const Row(
+                    children: [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'ou',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.gray400,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Digite o código da rota',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.gray900),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'O gestor vê esse código na mesma tela em que mostra o QR.',
+                    style: TextStyle(fontSize: 12.5, color: AppColors.gray600, height: 1.5),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _codeField,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textCapitalization: TextCapitalization.characters,
+                    textInputAction: TextInputAction.go,
+                    inputFormatters: [AccessCodeInputFormatter()],
+                    onSubmitted: _submit,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                    ),
+                    decoration: const InputDecoration(hintText: 'XXXX-XXXX-XXXX'),
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton(
+                    onPressed: () => _submit(_codeField.text),
+                    child: const Text('Abrir rota'),
+                  ),
+                  if (widget.controller.strandedCount > 0) ...[
+                    const SizedBox(height: 20),
+                    _strandedNote(widget.controller.strandedCount),
+                  ],
+                  const SizedBox(height: 24),
+                  _hint(),
                 ],
               ),
             ),
@@ -231,61 +149,8 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
     );
   }
 
-  Widget _header(BuildContext context) {
-    final topPadding = MediaQuery.of(context).padding.top;
-    return Container(
-      width: double.infinity,
-      color: AppColors.primary600,
-      padding: EdgeInsets.fromLTRB(28, topPadding + 40, 28, 40),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(Icons.route_outlined, color: Colors.white, size: 28),
-              ),
-              const Spacer(),
-              // Sair fica aqui, e não só na tela da rota: quem está sem rota aberta
-              // também pode precisar devolver o aparelho ou trocar de usuário.
-              IconButton(
-                onPressed: _signOut,
-                icon: const Icon(Icons.logout, color: Colors.white),
-                tooltip: 'Sair da conta',
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'RouteWise',
-            style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            widget.session.session?.driverName.isNotEmpty == true
-                ? '${widget.session.session!.driverName} — abra a rota que o gestor enviou'
-                : 'App do motorista — abra a rota que o gestor enviou',
-            style: const TextStyle(
-              color: AppColors.primary200,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Aviso de registro preso de uma rota anterior. Aparece aqui, e não só na rota, porque
-  /// é nesta tela que o motorista está quando ainda dá para procurar sinal antes de sair.
+  /// Aviso de registro preso de uma rota anterior. Aparece aqui porque é uma das telas em
+  /// que o motorista está parado, quando ainda dá para procurar sinal antes de sair.
   Widget _strandedNote(int count) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -321,19 +186,24 @@ class _OpenRouteScreenState extends State<OpenRouteScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: AppColors.primary50,
-        border: Border.all(color: AppColors.primary200),
+        color: AppColors.gray100,
         borderRadius: BorderRadius.circular(14),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.description_outlined, size: 18, color: AppColors.primary700),
+          Icon(Icons.info_outline, size: 18, color: AppColors.gray500),
           SizedBox(width: 11),
           Expanded(
             child: Text(
-              'Se o gestor mandou o link pelo WhatsApp, basta tocar nele — o app abre direto na rota do dia.',
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.primary700, height: 1.5),
+              'Só é possível abrir rotas escaladas no seu nome. Se o código for de outro motorista, '
+              'peça ao gestor para passar a rota para você.',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.gray600,
+                height: 1.5,
+              ),
             ),
           ),
         ],
