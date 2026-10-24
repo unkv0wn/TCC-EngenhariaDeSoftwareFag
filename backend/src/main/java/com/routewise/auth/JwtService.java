@@ -9,9 +9,12 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -24,8 +27,10 @@ public class JwtService {
      */
     private static final String CLAIM_TYPE = "typ";
     private static final String TYPE_MOBILE = "mobile";
+    private static final String TYPE_INTEGRATION = "integration";
     private static final String CLAIM_DRIVER_ID = "driverId";
     private static final String CLAIM_DEVICE_ID = "deviceId";
+    private static final String CLAIM_SCOPES = "scopes";
 
     private final SecretKey key;
     private final long expirationMs;
@@ -62,6 +67,50 @@ public class JwtService {
                 CLAIM_DRIVER_ID, driverId.toString(),
                 CLAIM_DEVICE_ID, deviceId
         ));
+    }
+
+    /**
+     * Token de um sistema integrado, com os escopos que ele recebeu.
+     *
+     * <p>Os escopos vão dentro do token, e não são relidos do banco a cada requisição: é
+     * o que torna a checagem de escopo barata. O preço é que revogar um escopo só vale
+     * para o próximo token — por isso a validade é curta.
+     */
+    public String generateIntegrationToken(String clientId, Set<String> scopes) {
+        return generateToken(clientId, Map.of(
+                CLAIM_TYPE, TYPE_INTEGRATION,
+                CLAIM_SCOPES, String.join(",", scopes)
+        ));
+    }
+
+    /**
+     * Lê uma sessão de integração de um token.
+     *
+     * <p>Vazio para qualquer token que não seja de integração — inclusive o do motorista
+     * e o do painel. Os três saem da mesma chave, e sem a marca de tipo um valeria pelo
+     * outro.
+     */
+    public Optional<IntegrationSession> parseIntegrationSession(String token) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            if (!TYPE_INTEGRATION.equals(claims.get(CLAIM_TYPE, String.class))) {
+                return Optional.empty();
+            }
+
+            String raw = claims.get(CLAIM_SCOPES, String.class);
+            Set<String> scopes = raw == null || raw.isBlank()
+                    ? Set.of()
+                    : new LinkedHashSet<>(Arrays.stream(raw.split(",")).map(String::trim).toList());
+
+            return Optional.of(new IntegrationSession(claims.getSubject(), scopes));
+        } catch (JwtException | IllegalArgumentException ex) {
+            return Optional.empty();
+        }
     }
 
     /**

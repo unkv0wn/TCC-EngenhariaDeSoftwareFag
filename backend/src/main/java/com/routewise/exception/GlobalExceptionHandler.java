@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -173,6 +174,25 @@ public class GlobalExceptionHandler {
     return ResponseEntity.badRequest().body(problem);
   }
 
+  // ── URL que não casa com nenhum handler ──────────────────────────────────
+
+  /**
+   * Caminho inexistente é 404, não 500.
+   *
+   * <p>Quando nenhum mapeamento casa, o Spring tenta servir a URL como recurso estático e
+   * lança {@code NoResourceFoundException}. Sem este handler ela cai no catch-all abaixo,
+   * e toda URL digitada errada responde "erro interno do servidor" — o que manda quem está
+   * integrando procurar defeito no backend em vez de conferir o endereço.
+   */
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<ProblemDetail> handleNoResource(NoResourceFoundException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+    problem.setTitle("Not Found");
+    problem.setDetail("Endereço não encontrado: " + ex.getResourcePath());
+    log.warn("No handler for {}", ex.getResourcePath());
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+  }
+
   // ── Login do app: credencial inválida ────────────────────────────────────
 
   @ExceptionHandler(MobileAuthException.class)
@@ -194,6 +214,42 @@ public class GlobalExceptionHandler {
     problem.setTitle("Device Not Authorized");
     problem.setDetail(ex.getMessage());
     log.warn("Mobile login refused: {}", ex.getMessage());
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+  }
+
+  // ── Integração: credencial inválida ──────────────────────────────────────
+
+  @ExceptionHandler(IntegrationAuthException.class)
+  public ResponseEntity<ProblemDetail> handleIntegrationAuth(IntegrationAuthException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
+    problem.setTitle("Unauthorized");
+    problem.setDetail(ex.getMessage());
+    // Sem o clientId tentado no log de aplicação: quem precisa disso é a auditoria, que
+    // o grava em tabela com dono e desfecho — log de aplicação circula por lugares que
+    // credencial não deveria alcançar.
+    log.warn("Integration request refused: bad credentials");
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+  }
+
+  // ── Integração: cliente revogado ─────────────────────────────────────────
+
+  @ExceptionHandler(IntegrationRevokedException.class)
+  public ResponseEntity<ProblemDetail> handleIntegrationRevoked(IntegrationRevokedException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
+    problem.setTitle("Forbidden");
+    problem.setDetail(ex.getMessage());
+    log.warn("Integration request refused: revoked client");
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+  }
+
+  // ── Integração: escopo insuficiente ──────────────────────────────────────
+
+  @ExceptionHandler(IntegrationScopeException.class)
+  public ResponseEntity<ProblemDetail> handleIntegrationScope(IntegrationScopeException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
+    problem.setTitle("Insufficient Scope");
+    problem.setDetail(ex.getMessage());
+    log.warn("Integration request refused: {}", ex.getMessage());
     return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
   }
 
