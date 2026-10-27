@@ -164,8 +164,12 @@ export function RouteMap({ result, stops = [], selectedStop = null, onSelectStop
 
   const initialCenter: [number, number] = markers[0]?.position ?? [DEPOT_COORD.lat, DEPOT_COORD.lng];
 
+  // isolate (isolation: isolate) prende os painéis do Leaflet neste contexto de
+  // empilhamento. Sem ele o .leaflet-container fica com z-index auto e os painéis dele
+  // — 400, 500, 600 — disputam direto com o resto da página: o modal de registrar
+  // evento (z-50) abria inteiro e o mapa pintava por cima dele.
   return (
-    <MapContainer center={initialCenter} zoom={13} scrollWheelZoom={false} className="h-full w-full rounded-xl">
+    <MapContainer center={initialCenter} zoom={13} scrollWheelZoom={false} className="isolate h-full w-full rounded-xl">
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

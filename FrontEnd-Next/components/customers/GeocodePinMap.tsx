@@ -20,8 +20,9 @@ interface GeocodePinMapProps {
 export function GeocodePinMap({ coord, onDragEnd }: GeocodePinMapProps) {
   const center = useMemo<[number, number]>(() => [coord.lat, coord.lng], [coord.lat, coord.lng]);
 
+  // isolate: ver RouteMap — sem ele os painéis do Leaflet pintam sobre modais.
   return (
-    <MapContainer center={center} zoom={14} scrollWheelZoom className="h-full w-full rounded-xl">
+    <MapContainer center={center} zoom={14} scrollWheelZoom className="isolate h-full w-full rounded-xl">
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
