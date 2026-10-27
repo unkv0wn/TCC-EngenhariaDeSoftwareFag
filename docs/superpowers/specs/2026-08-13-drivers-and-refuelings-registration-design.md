@@ -34,11 +34,12 @@ um motorista pelo `id`, do mesmo jeito que Produto referencia Unidade.
 - **Abastecimentos — campos:** veículo, motorista, data, odômetro atual, litros abastecidos,
   preço por litro, posto (opcional). Valor total é sempre **derivado** (`litros × preço/L`),
   nunca armazenado.
-- **Km rodado desde o último abastecimento é calculado e congelado na criação** (não recalculado
-  a cada render). Espelha o `RefuelingRecord` do backend, que também trata isso como um campo
-  gravado, não uma view derivada. Se um registro anterior do mesmo veículo for editado depois,
-  os posteriores não se reajustam sozinhos — aceitável para um dataset mock com poucos registros
-  seed.
+- ~~**Km rodado desde o último abastecimento é calculado e congelado na criação**~~ — **decisão
+  revertida na implementação.** O plano era gravar o campo, espelhando o `RefuelingRecord` do
+  backend. A migração `V7` deliberadamente não criou a coluna: com o valor gravado, corrigir um
+  odômetro digitado errado deixaria todos os registros seguintes desatualizados, sem nada na tela
+  indicando isso. O km rodado é **derivado** do histórico de odômetro onde for preciso — na tela
+  de abastecimentos e no modelo de consumo que alimenta o dashboard.
 - **Abastecimentos usa só Tabela**, sem Cards — é um registro/log transacional (como um extrato),
   não uma entidade com "perfil" como Veículo/Motorista. Ordenado por data decrescente.
 - **Exclusão bloqueada:** apagar um Veículo ou Motorista que tenha abastecimentos registrados é

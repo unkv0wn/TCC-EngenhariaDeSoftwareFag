@@ -85,7 +85,9 @@ All under `/api`. Every CRUD controller follows the same shape — `GET` (list),
 
 | Base path | Controller | Notes |
 |-----------|-----------|-------|
-| `/api/auth/login` | `AuthController` | `POST` only — see "Authentication" below |
+| `/api/auth/login` | `AuthController` | `POST` only — the manager's real login (BCrypt against `panel_users`). The one path under the panel's filter that needs no session |
+| `/api/auth/me` | `AuthController` | `GET` — who is signed in; exists because the cookie is `httpOnly` |
+| `/api/users` | `PanelUserController` | plain CRUD — the manager grants/blocks panel access |
 | `/api/vehicles`, `/api/drivers`, `/api/units`, `/api/products`, `/api/customers`, `/api/refuelings`, `/api/payment-methods`, `/api/payment-conditions` | one controller each | plain CRUD |
 | `/api/orders` | `OrderController` | CRUD + `PATCH /{id}/status` |
 | `/api/routes` | `SavedRouteController` | `GET`, `GET /{id}`, `POST`, `PATCH /{id}/status`, `DELETE /{id}` |
@@ -98,6 +100,7 @@ All under `/api`. Every CRUD controller follows the same shape — `GET` (list),
 | `/api/integration/token` | `IntegrationTokenController` | `POST` only — client-credentials grant. The one path under `/api/integration/**` that needs no token |
 | `/api/integration/orders`, `/routes`, `/deliveries` | `IntegrationController` | read-only third-party surface. **Requires an integration token carrying the path's scope** (see "Authentication") |
 | `/api/api-clients` | `ApiClientController` | CRUD + `POST /{id}/secret` (regenerate) + `GET /logs` — the manager's integration screen. Same hyphen rule: *not* under `/api/integration/`, so no token filter |
+| `/api/dashboard` | `DashboardController` | `GET` — the manager's home screen: operation plus estimated cost for a window of days |
 | `/api/settings` | `CompanySettingsController` | `GET` + `PUT`, single row |
 
 `RouteController`, `SavedRouteController` and `RouteEventController` **share the `/api/routes` base path**. They don't collide: the computation endpoints are fixed sub-paths (`/compute`, `/events/{requestId}`, `/graph-stats`), the saved-route ones are the root and `/{id}`, and the event log is `/{routeId}/events`. Note the near-miss — `/events/{requestId}` wants the literal in the *first* segment, `/{routeId}/events` in the *second*. Inverting either breaks routing with no compile error.
@@ -112,9 +115,9 @@ Errors come back as RFC 9457 problem details from `GlobalExceptionHandler`; the 
 
 ### Authentication (read this before touching login)
 
-There are **three unrelated auth stories here**, and only the last one is still open. Don't carry conclusions from one to the other.
+There are **three unrelated auth stories here**, all three now enforced. Don't carry conclusions from one to the other — the credential, the transport and the refusal differ in each.
 
-All three sign with the same secret, so each token carries a `typ` claim and each parser refuses the others. Without that marker a panel token — issued for any e-mail, no password — would pass as a driver session or an integration token.
+All three sign with the same secret, so each token carries a `typ` claim and each parser refuses the others. The signature verifies in all three cases, always; the claim is the only thing separating them, and losing it breaks nothing that shows. `JwtServiceTest` is there for that reason.
 
 **The secret comes from the `JWT_SECRET` environment variable** (`.env` at the repo root for compose, `.env.local` for `pnpm dev`, both gitignored; `.env.example` is the committed template). It used to be literal in `application.properties`, which on a public repo made every token forgeable. The fallback in `application.properties` is a clearly-marked dev-only value. Rotating the secret invalidates every existing panel cookie and driver session — that is expected, not a bug.
 
@@ -138,17 +141,19 @@ All three sign with the same secret, so each token carries a `typ` claim and eac
 - The read surface is `IntegrationDataService` with its own DTOs, deliberately not the panel's CRUD: what goes out is a contract promised to third parties, and reusing the panel's shapes would make every internal refactor a breaking change for whoever integrated.
 - Read-only. External writes (an ERP creating an order) were left out of scope — they bring validation and idempotency that deserve their own decision.
 
-#### Manager panel (`/api/auth/login`) — still navigational only
+#### Manager panel (`/api/auth/login`) — real, and enforced
 
-Auth exists but is **not enforced anywhere on the backend**:
+This was the last surface left open, and it was the one that administered the other two.
 
-- `AuthController.login` issues a JWT for **any** email it receives — it never checks a password, and there is no manager user table (`mobile_users` is the driver app's, not the panel's).
-- There is no filter on the panel's paths, no `spring-boot-starter-security` dependency and no `@PreAuthorize` — every `/api/**` endpoint **except `/api/mobile/**`** is reachable unauthenticated, `/api/mobile-users` (which grants app access) included.
-- The real credential check lives in the frontend: `FrontEnd-Next/app/api/login/route.ts` compares against a hardcoded `DataMock` pair, then asks the backend for a token and stores it in an `httpOnly` cookie named `routewise`.
-- `FrontEnd-Next/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`) guards `matcher: ["/dashboard/:path*"]`, verifying the cookie's signature and expiry with `jose` against `JWT_SECRET`.
-- `lib/apiClient.ts` sends **no** `Authorization` header and no credentials — the token never reaches the backend, which wouldn't check it anyway.
-
-So the guard is navigational only. Don't describe this as a working auth system, and don't assume a request carries an authenticated user. What the cookie is signed with is no longer a repo constant — see the `JWT_SECRET` note above.
+- `AuthController.login` → `PanelUserServiceImpl.authenticate` checks a **BCrypt** password against the `panel_users` table. It used to issue a JWT for any e-mail it received, with no password and no user table at all; the only credential check lived in a hardcoded pair inside `FrontEnd-Next/app/api/login/route.ts`.
+- `PanelAuthFilter` (registered for `/api/*` by `ApiFilterConfig`) refuses every panel request without a valid session. It skips three things and nothing else: the CORS preflight, `/api/auth/login`, and the two prefixes that have filters of their own (`/api/mobile/`, `/api/integration/`). So `/api/mobile-users` and `/api/api-clients` — the two cadastros that hand out access to the other surfaces — are now behind it.
+- Tokens carry `typ: "panel"`. A token with **no** `typ` is refused everywhere: that is the old format, minted without a password, and accepting it would leave the door open for exactly whoever already had one. `JwtServiceTest` pins all nine combinations.
+- **The token travels as the `httpOnly` cookie, and the filter also accepts `Authorization: Bearer`.** The cookie is what the browser sends (`lib/apiClient.ts` sets `credentials: "include"`); because the page's JavaScript cannot read it, neither can an XSS. The header exists so the panel API can be exercised from curl or Bruno, which have no cookie to offer.
+- CORS therefore sets `allowCredentials(true)`, which forces origins to stay explicit — the browser itself rejects the `*` wildcard on a credentialed request.
+- `FrontEnd-Next/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`) still guards `matcher: ["/dashboard/:path*"]` with `jose`, but it is no longer the only guard — it decides whether a *page* opens, while the filter decides whether *data* is served. `apiClient.ts` redirects to `/login` on any 401, because someone sitting on one screen never passes through the proxy again.
+- `GET /api/auth/me` exists for the same `httpOnly` reason: the page cannot open the token to find out who is signed in.
+- **Two guards against locking everyone out**, both in the service: the last *active* access cannot be blocked or deleted, and nobody can delete their own. Without them the recovery path would be an `UPDATE` straight into the database.
+- The demo credential (`teste@routewise.com` / `12345678`, documented in `README-DOCKER.md`) is seeded by `V23` as an ordinary row. Weak and public on purpose — it is a demonstration credential in an open repository.
 
 ### Route computation flow (backend)
 
@@ -176,6 +181,16 @@ Two distinct degradation paths, both deliberate:
 
 `OsmGraphService` can load an OSM file into an in-memory graph at startup, but it is **off by default** — `routewise.osm.data-path` is blank in `application.properties`. It does not feed the A* phase (the cost matrix comes from OSRM); it only backs the read-only `GET /api/routes/graph-stats`.
 
+### Cost model in the product (`RouteCostEstimator`)
+
+The cost model used to live only in `com.routewise.validation` — experiments that run on their own, write Markdown into `docs/`, and never touch the system. The route is optimised by **duration**; what it cost in reais was answered in a report, not in the product. `RouteCostEstimator` is the bridge, and `/api/dashboard` is where it surfaces.
+
+- It applies `CostMatrixBuilder`'s formula to a route's **totals** rather than edge by edge, and reads `baseTireWearPerKm` from there instead of copying it. The formula itself is restated in both places — the experiment needs it per edge, the product per route — so changing one means changing the other.
+- Two inputs are degraded on purpose, both for missing data: road type is taken as `ARTERIAL` (the reference, multipliers 1.0) because a saved route stores only totals, so an urban route is understated and a highway one overstated; and cargo volume is ignored because products carry no volume, so a light bulky load reads as an empty truck.
+- **What is measured and what is assumed differs per component, and the screen says so.** Fuel consumption comes from each vehicle's own refuelings through `EmpiricalFuelConsumptionCalculator` (a rolling window of five, weighted by distance), and the fuel price from what the fleet actually paid. Tyre cost and the driver's hourly rate are documented constants from the experiment, because the system registers neither tyre replacements nor hourly rates.
+- `kmSincePrevious` for that calculation is **derived** in `DashboardServiceImpl`, by ordering each vehicle's refuelings by odometer. It is deliberately not a column — `V7` says why: storing it would go stale when an earlier record is edited.
+- Vehicles map to one of the three `VehicleProfile` classes by registered `capacityKg`. The cadastro has no axle count, tyre price or driver rate, so the mapping is a declared approximation.
+
 ### `com.routewise.validation` package
 
 ~50 standalone experiment/analysis classes (cost-weight sensitivity, empirical fuel consumption, tire wear by axle position, cargo occupancy, marginal contribution, fleet simulations) that produce the reports under `docs/validation-reports/`. These are TCC research artifacts, **not** part of the request pipeline — they reuse `AStarWaypointOptimizer` unmodified rather than being called by it. Each has a `mvn compile exec:java -Dexec.mainClass=...` entry point documented in its class Javadoc. Design rationale lives in `docs/superpowers/specs/`.
@@ -184,9 +199,9 @@ Two distinct degradation paths, both deliberate:
 
 PostgreSQL via Spring Data JPA + Flyway. `backend/docker-compose.yml` runs Postgres 16 on host port **5434** (dev credentials `routewise`/`routewise`, db `routewise`). Connection settings read `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`, defaulting to that compose setup.
 
-Flyway owns the schema — `backend/src/main/resources/db/migration/`, currently `V1__init.sql` (empty baseline) through `V22__create_integration_request_log.sql`. `spring.jpa.hibernate.ddl-auto=validate`: Hibernate checks entities against the schema but never generates DDL. **Every schema change goes through a new migration file** — never edit an applied one.
+Flyway owns the schema — `backend/src/main/resources/db/migration/`, currently `V1__init.sql` (empty baseline) through `V23__create_panel_users.sql`. `spring.jpa.hibernate.ddl-auto=validate`: Hibernate checks entities against the schema but never generates DDL. **Every schema change goes through a new migration file** — never edit an applied one.
 
-17 entities / 15 repositories exist today: `Vehicle`, `Driver`, `Unit`, `Product`, `Customer`, `Refueling`, `PaymentMethod`, `PaymentCondition`, `Order` (+ `OrderItem`, `OrderHistoryEntry`), `SavedRoute`, `RouteEvent`, `CompanySettings`, `MobileUser`, `ApiClient`, `IntegrationRequestLog`. The two without a repository of their own are `OrderItem` and `OrderHistoryEntry`, reached only through `Order`. Services are `I<Name>Service` + `<Name>ServiceImpl`, all annotated `@Transactional` at class level with `@Transactional(readOnly = true)` on reads.
+18 entities / 16 repositories exist today: `Vehicle`, `Driver`, `Unit`, `Product`, `Customer`, `Refueling`, `PaymentMethod`, `PaymentCondition`, `Order` (+ `OrderItem`, `OrderHistoryEntry`), `SavedRoute`, `RouteEvent`, `CompanySettings`, `MobileUser`, `PanelUser`, `ApiClient`, `IntegrationRequestLog`. The two without a repository of their own are `OrderItem` and `OrderHistoryEntry`, reached only through `Order`. Services are `I<Name>Service` + `<Name>ServiceImpl`, all annotated `@Transactional` at class level with `@Transactional(readOnly = true)` on reads.
 
 Referential deletes are guarded in the service layer, not by FK cascade: deleting a Unit in use by a Product, or a Vehicle/Driver with refuelings, is blocked.
 
@@ -233,7 +248,7 @@ Form validation is Zod schemas under `lib/validations/`, one file per resource; 
 
 ## Testing
 
-Backend has 13 JUnit 5 classes / 68 tests. Ten are under `algorithm/` and `validation/` — the A* optimizer, its tie-break benchmark, Haversine, and the empirical cost calculators. Two are under `service/` and cover the order↔route lifecycle: `RouteStopResolverTest` (pure, no mocks — pins stop↔order matching by coordinate) and `RouteOrderLifecycleTest` (Mockito — pins **which orders must not move**). One is under `entity/`: `ApiClientTest` pins scope reading, including that `orders:readonly` does **not** grant `orders:read` — the column is comma-separated text, and deciding access by substring is a mistake that compiles and opens data. Those two service tests are the only service-level ones; there are still **no tests for any controller or repository**, and no `@SpringBootTest` context test (which would need a running Postgres or Testcontainers — not wired in). `FrontEnd-Next/` has no tests and no runner. The only frontend tests (`useWaypoints`, `useSseListener`, Vitest) live in the frozen `frontend/` prototype.
+Backend has 15 JUnit 5 classes / 83 tests. Ten are under `algorithm/` and `validation/` — the A* optimizer, its tie-break benchmark, Haversine, and the empirical cost calculators. Three are under `service/`. Two cover the order↔route lifecycle: `RouteStopResolverTest` (pure, no mocks — pins stop↔order matching by coordinate) and `RouteOrderLifecycleTest` (Mockito — pins **which orders must not move**). One is under `auth/`: `JwtServiceTest` pins that a token of one surface is refused by the other two, and that a token with no `typ` is refused by all three — the three are signed with the same key, so the signature always verifies and only that claim separates them. One is under `entity/`: `ApiClientTest` pins scope reading, including that `orders:readonly` does **not** grant `orders:read` — the column is comma-separated text, and deciding access by substring is a mistake that compiles and opens data. The third is `RouteCostEstimatorTest`, which pins the cost formula against values worked out by hand from `CostMatrixBuilder`'s documentation — not captured from a run, because a test that records today's output approves tomorrow's mistake along with it. Those three are the only service-level tests; there are still **no tests for any controller or repository**, and no `@SpringBootTest` context test (which would need a running Postgres or Testcontainers — not wired in). `FrontEnd-Next/` has no tests and no runner. The only frontend tests (`useWaypoints`, `useSseListener`, Vitest) live in the frozen `frontend/` prototype.
 
 `mobile/` has `test/route_models_test.dart`, covering the wire contract with `/api/mobile/**`: event serialisation, the exact `type` strings the backend validates, and route parsing. That contract is the thing that breaks silently — a field renamed in Java still compiles on the Dart side and only surfaces as a rejected event, in the field. `test/access_code_test.dart` fixes what the app accepts as a code (QR, deep link, typed), and `test/event_queue_test.dart` pins the offline queue being **per route**: a single shared queue used to push the previous route's pending delivery into the newly opened one. `test/mobile_login_test.dart` covers the login contract (the field names `MobileLoginRequestDto` reads, and 401-vs-403 meaning different things to the driver) plus the `Authorization` header actually going out on route calls — if it stops, every mobile endpoint fails at once, in the field. `test/route_list_test.dart` does the same for the home screen's list: a renamed field in `MobileRouteSummaryDto` still compiles on the Dart side and surfaces as an empty home screen, which a driver reads as "I have no route today" rather than as a broken app.
 

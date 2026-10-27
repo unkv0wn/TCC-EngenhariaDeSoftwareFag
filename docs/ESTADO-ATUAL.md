@@ -46,13 +46,13 @@ starter de segurança), `osm4j` 1.4.1 (core/xml/pbf), `commons-math3` 3.6.1 (só
 
 ### Persistência — ativa
 
-PostgreSQL via JPA + Flyway. **17 entidades, 15 repositórios, 22 migrações** (`V1__init.sql`,
-baseline vazio, até `V22__create_integration_request_log.sql`). `ddl-auto=validate`: o Hibernate confere as
+PostgreSQL via JPA + Flyway. **18 entidades, 16 repositórios, 23 migrações** (`V1__init.sql`,
+baseline vazio, até `V23__create_panel_users.sql`). `ddl-auto=validate`: o Hibernate confere as
 entidades contra o schema e nunca gera DDL — toda mudança de schema passa por migração nova.
 
 Entidades: `Vehicle`, `Driver`, `Unit`, `Product`, `Customer`, `Refueling`, `PaymentMethod`,
 `PaymentCondition`, `Order` (+ `OrderItem`, `OrderHistoryEntry`), `SavedRoute`, `RouteEvent`,
-`CompanySettings`, `MobileUser`, `ApiClient`, `IntegrationRequestLog`.
+`CompanySettings`, `MobileUser`, `PanelUser`, `ApiClient`, `IntegrationRequestLog`.
 
 Serviços seguem `I<Nome>Service` + `<Nome>ServiceImpl`, `@Transactional` na classe com
 `@Transactional(readOnly = true)` nas leituras. Exclusões referenciais são barradas na camada de
@@ -62,15 +62,15 @@ serviço, não por cascade de FK.
 
 ```
 algorithm/     AStarWaypointOptimizer, HaversineUtil
-auth/          JwtService, MobileSession/MobileAuthFilter, IntegrationSession/IntegrationAuthFilter,
+auth/          JwtService, e um par Session/Filter por superfície (Panel, Mobile, Integration),
                RouteAccessCodeGenerator
 config/        CorsConfig, RestTemplateConfig, ApiFilterConfig (registra os dois filtros)
-controller/    20 controllers REST
+controller/    22 controllers REST
 dto/           ~55 records de entrada/saída (+ dto/osrm/)
-entity/        17 entidades JPA
+entity/        18 entidades JPA
 exception/     GlobalExceptionHandler (RFC 9457) + 10 exceções de domínio
 model/         RouteMode
-repository/    15 interfaces Spring Data
+repository/    16 interfaces Spring Data
 service/       CRUD + RouteStopResolver, RouteOrderLifecycle, RouteStatus,
                IntegrationDataService, IntegrationAuditService
 service/impl/  OsrmClientServiceImpl, RouteOptimizerServiceImpl, SseEventServiceImpl
@@ -84,7 +84,9 @@ Todos sob `/api`. Os CRUDs seguem a mesma forma (`GET`, `POST`, `PUT /{id}`, `DE
 
 | Base | Controller | Observação |
 |---|---|---|
-| `/api/auth/login` | `AuthController` | emite JWT pra **qualquer** e-mail, sem conferir senha |
+| `/api/auth/login` | `AuthController` | login real do gestor (BCrypt contra `panel_users`) |
+| `/api/auth/me` | `AuthController` | `GET` — quem está logado; existe por causa do cookie `httpOnly` |
+| `/api/users` | `PanelUserController` | o gestor concede/bloqueia acesso ao painel |
 | `/api/vehicles`, `/api/drivers`, `/api/units`, `/api/products`, `/api/customers`, `/api/refuelings`, `/api/payment-methods`, `/api/payment-conditions` | um por recurso | CRUD puro |
 | `/api/orders` | `OrderController` | CRUD + `PATCH /{id}/status` |
 | `/api/routes` | `SavedRouteController` | `GET`, `GET /{id}`, `POST`, `PATCH /{id}/status`, `DELETE /{id}` |
@@ -97,6 +99,7 @@ Todos sob `/api`. Os CRUDs seguem a mesma forma (`GET`, `POST`, `PUT /{id}`, `DE
 | `/api/integration/token` | `IntegrationTokenController` | `POST` — troca `clientId` + `clientSecret` por token curto (client-credentials) |
 | `/api/integration/orders`, `/routes`, `/deliveries` | `IntegrationController` | leitura para terceiros — **exige token com o escopo daquele caminho** |
 | `/api/api-clients` | `ApiClientController` | CRUD + `POST /{id}/secret` (novo segredo) + `GET /logs` — a tela de integrações do gestor |
+| `/api/dashboard` | `DashboardController` | `GET` — a tela inicial: operação e custo estimado numa janela de dias |
 | `/api/settings` | `CompanySettingsController` | `GET` + `PUT`, linha única |
 
 ### Pipeline de cálculo de rota
@@ -122,11 +125,13 @@ segundos. Heurística admissível: para cada nó não visitado, a menor aresta d
 são expandidos, nunca o custo. Limite de 2–15 waypoints (espaço `N × 2^N`). Três modos, todos
 implementados: `ROUND_TRIP`, `OPEN_ROUTE`, `FIXED_START_END`.
 
-### Autenticação — três histórias diferentes
+### Autenticação — três histórias diferentes, todas exigidas
 
 As três assinam com o mesmo segredo, então cada token leva uma claim `typ` e cada parser recusa as
-outras. Sem essa marca, um token do painel — emitido pra qualquer e-mail, sem senha — passaria como
-sessão de motorista ou como token de integração.
+outras. A assinatura confere nos três casos, sempre — a claim é a única coisa que os separa, e
+perdê-la não quebra nada que apareça. O `JwtServiceTest` existe por isso. Token sem tipo é recusado
+em toda parte: é o formato antigo do painel, emitido sem senha, e aceitá-lo manteria a porta aberta
+para quem já tivesse um guardado.
 
 **O segredo vem da variável de ambiente `JWT_SECRET`** (`.env` na raiz para o compose, `.env.local`
 para o `pnpm dev`, os dois no `.gitignore`; `.env.example` é o modelo versionado). Ele estava
@@ -156,13 +161,26 @@ chamou, o rollback apagaria justamente as linhas que importam. A superfície é 
 escrita externa (um ERP criando pedido) ficou fora de escopo, por trazer validação e idempotência
 que merecem decisão própria.
 
-**Painel (`/api/auth/login`) — só navegacional.** `AuthController` emite token pra qualquer e-mail,
-sem senha e sem tabela de usuário. A conferência de credencial mora no front
-(`app/api/login/route.ts`, par fixo no código) e o `proxy.ts` do Next valida o cookie só pra
-decidir se a tela abre. O `lib/apiClient.ts` **não manda** `Authorization`. Resultado: todo
-`/api/**`, menos `/api/mobile/**` e `/api/integration/**`, responde sem autenticação — inclusive
-`/api/mobile-users` e `/api/api-clients` — quem concede acesso ao app e quem cria credencial de
-integração. É a única das três histórias que continua aberta.
+**Painel (`/api/auth/login`) — real e exigida.** Era a última porta aberta, e era a que administra
+as outras duas. O `AuthController` emitia token pra qualquer e-mail, sem senha e sem tabela de
+usuário; a única conferência de credencial morava num par fixo dentro do front. Agora confere senha
+em BCrypt contra `panel_users`, e o `PanelAuthFilter`, registrado para `/api/*`, recusa com 401
+tudo o que não traga sessão — descascando só o preflight do CORS, o próprio login e os dois
+prefixos que têm filtro próprio. Com isso `/api/mobile-users` e `/api/api-clients`, que são quem
+concede acesso ao app e quem cria credencial de integração, passaram a exigir sessão.
+
+O token viaja no cookie `httpOnly` (o `apiClient.ts` manda `credentials: "include"`), que a página
+não consegue ler — e é por não conseguir que um XSS também não consegue. O filtro aceita
+`Authorization: Bearer` além do cookie, pra que a superfície do painel seja testável fora do
+navegador. Isso obriga o CORS a `allowCredentials(true)`, e portanto a origens explícitas: com
+credencial na chamada, o curinga é recusado pelo próprio navegador.
+
+O `proxy.ts` do Next continua decidindo se a **página** abre; o filtro decide se o **dado** sai. E
+o `apiClient.ts` manda pro login a qualquer 401, porque quem fica numa tela só nunca passa de novo
+pelo proxy.
+
+Duas travas no serviço impedem trancar a porta por dentro: o último acesso ativo não pode ser
+bloqueado nem excluído, e ninguém exclui o próprio. Sem elas, o conserto seria um `UPDATE` no banco.
 
 ### Ciclo pedido ↔ rota
 
@@ -196,9 +214,11 @@ aproximado por natureza, já que o campo não existia quando foram entregues.
 
 ### Testes
 
-**13 classes, 68 testes.** Dez em `algorithm/` e `validation/` (o otimizador, o benchmark de
+**15 classes, 83 testes.** Dez em `algorithm/` e `validation/` (o otimizador, o benchmark de
 desempate, Haversine, as calculadoras empíricas). Duas em `service/`: `RouteStopResolverTest` e
-`RouteOrderLifecycleTest`, cobrindo o ciclo do pedido. Uma em `entity/`: `ApiClientTest`, que
+`RouteOrderLifecycleTest`, cobrindo o ciclo do pedido. Uma em `auth/`: `JwtServiceTest`, que fixa
+que token de uma superfície não vale em outra — os três são assinados com a mesma chave, então a
+assinatura sempre confere e só a claim `typ` os separa. Uma em `entity/`: `ApiClientTest`, que
 fixa a leitura de escopos — inclusive que `orders:readonly` **não** concede `orders:read`, erro
 que compila e abre dado, porque a coluna é texto separado por vírgula.
 
@@ -228,7 +248,7 @@ recarregam do servidor.
 |---|---|
 | `/` | redireciona pra `/login` |
 | `/login` | `LoginForm` → `app/api/login/route.ts` (cookie httpOnly `routewise`) |
-| `/dashboard` | KPIs |
+| `/dashboard` | operação e custo estimado do período (7/30/90 dias) |
 | `/dashboard/veiculos`, `/motoristas`, `/abastecimentos` | cadastros de frota |
 | `/dashboard/acessos-app` | **acessos do app do motorista** (usuário, senha, aparelho autorizado) |
 | `/dashboard/unidades`, `/produtos` | catálogo |
@@ -239,23 +259,24 @@ recarregam do servidor.
 | `/dashboard/rotas/gerar` | gera a rota a partir dos pedidos faturados (mapa + A* + SSE) |
 | `/dashboard/rotas/[id]` | acompanhamento: mapa, paradas, eventos, documentos |
 | `/dashboard/integracoes` | credenciais de integração (escopos, novo segredo) + registro de acesso |
+| `/dashboard/usuarios` | acessos ao painel (nome, e-mail, senha, bloqueio) |
 | `/dashboard/configuracoes` | dados da empresa (origem da rota) |
 
 `proxy.ts` (o Next 16 renomeou `middleware.ts` → `proxy.ts`) protege `/dashboard/:path*`.
 
 ### Estrutura
 
-- **`components/`** — 16 pastas por feature + `components/ui/` com 19 primitivas compartilhadas
+- **`components/`** — 17 pastas por feature + `components/ui/` com 19 primitivas compartilhadas
   (`Button`, `Input`, `Modal`, `ConfirmDialog`, `PageHeader`, `CreateButton`, `SearchInput`,
   `EmptyState`, `LoadingState`, `ViewToggle`, `Pagination`, `ActionsMenu`, `SearchableSelect`,
   `toast/`…). Cada cadastro repete a forma `<Feature>PageContent` + `<Feature>FormModal` +
   `<Feature>Table` (+ `Card`/`Grid` onde há visão de cartões). **Não há primitiva `Select`** —
   dropdown com busca é `SearchableSelect`; filtro simples é um `<select>` nativo estilizado.
-- **`hooks/`** — 17, um por recurso, mais `usePagination`, `useToast`, `useRouteComputation`.
-- **`services/`** — 19, incluindo quatro APIs públicas de terceiros chamadas direto do navegador,
+- **`hooks/`** — 18, um por recurso, mais `usePagination`, `useToast`, `useRouteComputation`.
+- **`services/`** — 20, incluindo quatro APIs públicas de terceiros chamadas direto do navegador,
   todas gratuitas e sem chave: ViaCEP, BrasilAPI (CNPJ), FIPE via BrasilAPI, Nominatim
   (geocoding, com CEP v2 da BrasilAPI como reserva e pin manual como último recurso).
-- **`lib/validations/`** — 16 schemas Zod, um por recurso.
+- **`lib/validations/`** — 17 schemas Zod, um por recurso.
 
 ### Pontos mockados, declarados como mock
 
@@ -318,10 +339,11 @@ de frontend do repositório**.
 
 | Funciona de ponta a ponta | Mockado, declarado como mock | Ausente |
 |---|---|---|
-| Cadastros (8 recursos), com CEP/CNPJ/FIPE automáticos | Anexos de documento/foto (painel e app) | Autenticação real no painel |
+| Cadastros (8 recursos), com CEP/CNPJ/FIPE automáticos | Anexos de documento/foto (painel e app) | Papéis/permissões por usuário |
 | Pedidos com máquina de status, travados pra edição a partir de faturado | Coordenada aproximada por cidade (reserva) | Tela de registros de login do app |
 | Geração de rota (A* + OSRM + SSE) | | Mapa da rota no app do motorista |
 | Acompanhamento da rota (mapa, paradas, eventos) | | Testes de controller/repositório |
 | App do motorista: login com aparelho, suas rotas na tela inicial, eventos offline | | Modo escuro de verdade |
 | Ciclo do pedido fechado (faturado → em rota → entregue), com data/hora da entrega | | |
 | Integração para terceiros: credencial, token por escopo, leitura e auditoria | | Escrita externa pela integração (fora de escopo) |
+| Autenticação do painel: senha em BCrypt, sessão exigida em todo o CRUD, cadastro de usuários | | |

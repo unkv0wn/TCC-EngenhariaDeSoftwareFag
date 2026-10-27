@@ -331,19 +331,25 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 **Main Flow:**
 1. Manager opens `/dashboard/abastecimentos` and starts a record.
 2. Manager selects vehicle and driver, and enters date, odometer, litres and price per litre.
-3. The screen shows the derived total and the kilometres run since that vehicle's previous refuelling.
-4. On save, the kilometres since the previous record are frozen onto the row.
+3. The screen shows the derived total and the kilometres run since that vehicle's previous refuelling — the reading immediately below the one being entered, not the vehicle's highest.
+4. The record is saved with its odometer reading. The distance since the previous refuelling is **not** stored — it is derived from the odometer history whenever it is needed, both on this screen and by the consumption model behind the dashboard.
 
 **Alternative Flows:**
 
 | Code | Trigger | System Response |
 |------|---------|-----------------|
 | 3a | First refuelling for the vehicle | The screen states so and no distance is derived. |
-| 4a | An earlier record is edited afterwards | Later records are **not** recomputed; the stored value is a snapshot, matching the backend's empirical consumption model. |
+| 3b | The reading does not fit the vehicle's timeline | Refused, naming the neighbouring reading: it must be above the previous refuelling's and below the next one's. Checking only against the highest reading would make an older record impossible to correct, since every plausible value for it is lower. |
+| 4a | An earlier record is edited afterwards | Every derived distance that depended on it changes with it, because none of them were stored. `V7` chose this deliberately: a frozen value would go stale the moment a mistyped odometer was corrected. |
+| 4b | An odometer reading lower than the previous one | The pair is skipped when consumption is computed — a negative or zero distance is a typo, and dividing by it would produce a consumption figure that poisons the fleet average. |
 
 **Post-conditions:**
-- The refuelling history can feed the empirical fuel-consumption analysis under
-  `com.routewise.validation`.
+- The refuelling history feeds the empirical fuel-consumption model, which is what the
+  dashboard uses to cost a route in reais (see UC-13).
+- The screen totals what is on it: money spent, litres, average consumption and average
+  price paid, for whatever filter is applied. The average divides total distance by total
+  litres rather than averaging each row's figure, so a tank that covered 650 km weighs more
+  than one that covered 80 — the same method the backend's model uses.
 
 ---
 
@@ -383,3 +389,76 @@ back to an approximate city point for it (see UC-05, alternative 2a).
 - The manager can see, on one screen, every access and every refusal — including attempts with an identifier matching no credential.
 
 **Out of scope:** external writes. An ERP creating an order brings validation and idempotency questions that deserve their own decision, and were deliberately left out.
+
+---
+
+## UC-12 — Grant and Revoke Panel Access
+
+**ID:** UC-12
+**Actors:** Manager, Web frontend, Backend
+**Source Stories:** US-22
+
+**Pre-conditions:**
+- The manager is signed in. Until this version there was nothing to sign in to: the backend issued a token for any e-mail and the only credential check was a hardcoded pair in the web client.
+
+**Main Flow:**
+1. The manager signs in with e-mail and password; the backend checks the password against a BCrypt hash in `panel_users` and returns a session token.
+2. The Next.js route handler stores the token in an `httpOnly` cookie, which the page's own JavaScript cannot read — and therefore neither can a cross-site scripting flaw.
+3. Every subsequent call to the panel API carries that cookie, and the server refuses anything without a valid session.
+4. The manager opens `/dashboard/usuarios` and creates an access: name, e-mail, password and status.
+5. The new person signs in with that credential and reaches the same screens.
+6. When someone leaves, the manager blocks or deletes their access; the next login attempt is refused.
+
+**Alternative Flows:**
+
+| Code | Trigger | System Response |
+|------|---------|-----------------|
+| 1a | Wrong password, or an e-mail with no account | HTTP 401 with one message for both cases: distinguishing them would tell whoever is guessing that the account exists. |
+| 1b | Correct password, access blocked | HTTP 403 with its own message — and only after the password is checked, so that the status is not revealed to someone who does not hold the credential. |
+| 3a | The session expires while the manager is working | The next call answers 401 and the browser is sent back to the login. The page guard alone would not catch this: someone sitting on one screen never navigates again. |
+| 4a | E-mail already registered | Refused, naming the field — the database constraint alone would surface as a generic conflict. |
+| 6a | Blocking or deleting the last active access | Refused. It would leave the panel with nobody able to enter, and the only way back would be an `UPDATE` straight into the database. |
+| 6b | Deleting one's own access | Refused. It would drop the person mid-action while their session kept working until the token expired. |
+| 6c | The blocked person still has a session open | It keeps working until the token expires — blocking stops the **next** login, not the one in progress. Revoking a live session would need server-side session state, which was not built. |
+
+**Post-conditions:**
+- Only people with a registered credential reach the panel, and with it the screens that grant access to the driver app and to integrations.
+- The account's last login is recorded.
+
+**Out of scope:** roles. Everyone who signs in reaches every screen; splitting admin from operator is authorisation, a separate concern.
+
+---
+
+## UC-13 — Read the Operation's Cost
+
+**ID:** UC-13
+**Actors:** Manager, Web frontend, Backend, Cost model
+**Source Stories:** US-23
+
+**Pre-conditions:**
+- Routes exist in the chosen window. Refuellings make the estimate better but are not required.
+
+**Main Flow:**
+1. The manager signs in and lands on the dashboard, which asks the backend for a summary of the last 30 days.
+2. The backend counts the routes created and concluded, the distance, the stops, the deliveries registered in the field and the orders still waiting for a route.
+3. For each vehicle, it derives the distance between refuellings from the odometer history and measures consumption over a distance-weighted rolling window of the last five.
+4. For each route in the window, it applies the project's cost model to the route's totals — distance, duration and cargo weight — producing fuel, tyre wear and driver hours in reais.
+5. It sums what was actually spent on fuel in the window, from the refuelling records.
+6. The screen shows the operation, the estimated cost split by component, the fuel actually purchased beside it, and consumption per vehicle marked as measured or as the profile's reference.
+7. The manager switches the window to 7 or 90 days and the whole summary is recomputed.
+
+**Alternative Flows:**
+
+| Code | Trigger | System Response |
+|------|---------|-----------------|
+| 3a | A vehicle has fewer than two refuellings | Its profile's documented constant is used, and the row says so — "sem abastecimento" or "1 abastecimento — insuficiente". Two vehicles showing the same figure mean different things, and the table has to say which is which. |
+| 3b | An odometer reading is lower than the previous one | That interval is skipped. It is a typo, and dividing by a negative or zero distance would produce a consumption figure that poisons the fleet average. |
+| 4a | A route's orders carry no weight, or predate the stop↔order link | The load factor is zero and the truck is costed as empty — understated, not failed. |
+| 4b | The route's vehicle was deleted afterwards | The lightest profile is assumed rather than failing: one missing vehicle should not take the whole screen down. |
+| 5a | Nobody refuelled during the window | The purchased figure is R$ 0,00, stated as such, and the estimate uses the model's reference price — labelled "preço de referência" rather than passed off as what the fleet paid. |
+| 6a | The two figures do not reconcile | Expected. The estimate covers routes planned here; the fuel purchased covers everything the trucks did, planned or not. The screen shows them side by side instead of subtracting one from the other. |
+
+**Post-conditions:**
+- The manager can see what the operation cost in reais, and which parts of that figure are measured and which are modelled.
+
+**Out of scope:** cost per individual route on the route screen, and planned-versus-realised comparison for one route — the latter needs expenses recorded against a route, which the system does not do.

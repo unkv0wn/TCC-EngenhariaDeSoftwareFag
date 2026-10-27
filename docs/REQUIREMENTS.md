@@ -28,7 +28,7 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 
 | Actor | Where | Authenticated |
 |-------|-------|---------------|
-| **Manager** (gestor) | `FrontEnd-Next/` web dashboard | Login screen exists; not enforced by the backend — see "Known gaps" |
+| **Manager** (gestor) | `FrontEnd-Next/` web dashboard | Yes: e-mail + password (BCrypt), and every panel endpoint requires the session |
 | **Driver** (motorista) | `mobile/` Android app | Yes: username + password (BCrypt) and the phone must be the one the manager enrolled. The route itself is then opened by a per-route code |
 | **External system** (integração) | any HTTP client | Yes: a client credential traded for a short-lived token, which carries the scopes it may read |
 
@@ -82,6 +82,18 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 |-------|----------|-----------------------------------------------------------------|-----------------------------------------------------------------|
 | US-21 | Manager  | Give an external system a credential that reads my orders, routes and deliveries | The company's other systems stop depending on someone exporting data by hand |
 
+### Operational overview (manager)
+
+| ID    | As a…    | I want to…                                                      | So that…                                                        |
+|-------|----------|-----------------------------------------------------------------|-----------------------------------------------------------------|
+| US-23 | Manager  | Open the system and see what the operation did and what it cost | I can tell whether the optimised routes are actually cheaper, instead of only knowing they were shorter |
+
+### Panel access (manager)
+
+| ID    | As a…    | I want to…                                                      | So that…                                                        |
+|-------|----------|-----------------------------------------------------------------|-----------------------------------------------------------------|
+| US-22 | Manager  | Sign in with my own password and control who else can enter the panel | Nobody reaches the operation's data — or the screens that grant access to the app and to integrations — just by reaching the server |
+
 ---
 
 ## DECISIONS LOCKED
@@ -120,6 +132,9 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 
 ### Fleet management
 - [x] Eight registration screens, each backed by a real table
+- [x] A refuelling's distance is derived from the reading below it, so no row shows negative kilometres
+- [x] An older refuelling can be corrected: the reading must sit between its neighbours, not above the highest
+- [x] The refuellings screen totals spend, litres, average consumption and average price for the current filter
 - [x] Orders carry items, discount, freight, history and a validated status machine
 - [x] Orders sharing an address collapse into one route stop
 - [x] Routes persist with their algorithm snapshot and can be listed and reopened
@@ -163,13 +178,37 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 - [x] The log survives deletion of the credential it refers to
 - [ ] External writes (an ERP creating an order) — **out of scope by decision**
 
+### Operational overview
+- [x] The home screen shows real numbers for a window of 7, 30 or 90 days
+- [x] Deliveries are counted by when the driver registered them in the field
+- [x] The estimated cost of the window is split into fuel, tyre wear and driver hours
+- [x] Fuel consumption is measured from each vehicle's own refuellings when there are enough
+- [x] A vehicle with too little history is shown as using the reference figure, not as measured
+- [x] The fuel actually purchased in the window is shown next to the estimate, not in place of it
+- [x] The screen states that it is an estimate, and which components are model constants
+- [ ] Cost per route on the route screen itself — **not done**
+- [ ] Planned versus realised cost for a single route — **not done**, it needs expenses recorded per route
+
+### Panel access
+- [x] Sign-in with e-mail and password, checked against a BCrypt hash in the database
+- [x] A wrong password and an unknown e-mail give the same answer
+- [x] A blocked access is refused with its own message, after the password is checked
+- [x] Every panel endpoint refuses a request with no session — including the cadastros that grant access to the app and to integrations
+- [x] A token from the app or from an integration is refused on the panel, and vice versa
+- [x] The manager creates, edits, blocks and deletes panel accesses from a screen
+- [x] The last active access cannot be blocked or deleted, and nobody can delete their own
+- [x] A session that expires sends the browser back to the login instead of failing screen by screen
+- [ ] Roles (admin/operator) — **out of scope by decision**
+- [ ] Revoking a session before its token expires — **not done**
+
 ### Quality
 - [x] No business logic in the frontends — both consume the same API
 - [x] Backend response under 5 s for the practical waypoint ceiling
 - [x] Automated tests for the order lifecycle (stop↔order matching and propagation)
 - [x] Automated test pinning that a scope nobody granted cannot be read out of a similar one
+- [x] Automated test pinning that a token of one surface is refused by the other two
 - [ ] Automated tests for controllers and repositories — **not done**
-- [ ] Manager authentication enforced — **not done** (see below)
+- [x] Manager authentication enforced on the backend, not only in the page guard
 - [ ] A screen showing app login attempts — **not done** (see below)
 
 ---
@@ -178,15 +217,14 @@ claimed (see `docs/formulas-a-star-e-custo.md` and FR-12 in the SRS).
 
 These are stated here rather than hidden, because they bound what the system can claim.
 
-1. **Manager authentication is navigational only.** The backend issues a JWT for any
-   e-mail and validates no password; every endpoint outside `/api/mobile/**` is reachable
-   unauthenticated. The guard lives in the Next.js proxy and protects pages, not data.
-   The driver surface is the exception — it is genuinely enforced.
-2. **That asymmetry has a sharp edge.** `/api/mobile-users`, which grants app access, and
-   `/api/api-clients`, which creates integration credentials, both sit
-   on the unauthenticated side. Whoever reaches port 8080 can create an account and
-   register their own phone, or mint an integration credential for themselves. Both enforced
-   surfaces hold only as far as the network does.
+1. **Every user of the panel shares one level of access.** Authentication is enforced, but
+   there are no roles: whoever signs in reaches every screen, including the two that
+   grant access to the other surfaces. Splitting admin from operator is authorisation,
+   a separate concern, and was not built.
+2. **Sessions cannot be revoked before they expire.** A token is valid for an hour by its
+   own signature; blocking or deleting an access stops the *next* login, not the session
+   already in someone's browser. A server-side session list would close this, at the cost
+   of a database read on every request.
 3. **The route code is no longer a bearer secret.** It selects which route, and the
    server additionally requires a driver session *and* that the route belong to that
    driver. Holding the link reaches nothing on its own. The trade-off is that a driver

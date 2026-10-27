@@ -65,18 +65,17 @@ nasce com `driverId` e `vehicleId`.
    - [x] Tela do gestor para criar/revogar credencial, gerar novo segredo e ler o registro
      de acesso (`/dashboard/integracoes`)
    - [x] Segredo do JWT fora do código, em `JWT_SECRET` (`.env` versionado só como exemplo)
+   - [x] Autenticação real no painel: senha em BCrypt em `panel_users`, sessão exigida
+     em todo o CRUD (inclusive nos cadastros que concedem acesso ao app e à integração)
+   - [x] Tela de usuários do painel, com trava contra fechar a última porta por dentro
+   - [x] Dashboard real: operação e custo estimado do período, com o modelo de custo do
+     TCC saindo dos relatórios e entrando no produto (`RouteCostEstimator`)
 
 ## Em aberto
 
 Em ordem de valor, na avaliação atual:
 
-1. **Autenticação real no painel.** Hoje `/api/auth/login` emite token pra qualquer e-mail, sem
-   senha, e todo `/api/**` fora de `/api/mobile/**` e `/api/integration/**` responde sem
-   autenticação — inclusive `/api/api-clients`, que cria credencial de integração, e
-   `/api/mobile-users`, que concede acesso ao app. A trava de aparelho do app tem uma porta aberta
-   ao lado. Enquanto a 8080 só é alcançável na LAN, é problema contido; para o texto do TCC,
-   "autenticação simplificada, fora do escopo" é posição defensável desde que **escrita**.
-2. **Tela de registros de login do app.** Hoje só o último sucesso é guardado
+1. **Tela de registros de login do app.** Hoje só o último sucesso é guardado
    (`mobile_users.last_login_at`); toda recusa é descartada num `log.warn`. O gestor não distingue
    senha errada de aparelho não cadastrado de acesso bloqueado, e uma tentativa de entrar com
    celular não autorizado — o evento que o cadastro de aparelho existe pra impedir — não aparece em
@@ -84,12 +83,17 @@ Em ordem de valor, na avaliação atual:
    anulável pra sobreviver à exclusão do acesso, e gravação em transação separada (senão a recusa
    lança e desfaz o próprio log). Esse desenho agora existe construído em outro lugar:
    `integration_request_log`, com a FK anulável e o `REQUIRES_NEW` — serve de molde.
-3. **Mapa da rota no app** (`route_map_screen.dart`). Previsto no spec e não construído. A
+2. **Mapa da rota no app** (`route_map_screen.dart`). Previsto no spec e não construído. A
    geometria já vem pronta no `result` da rota — é tela de leitura, não precisa de serviço novo. O
    item mais barato da lista.
-4. **Testes de controller e repositório.** Os 68 testes do backend cobrem A*, as calculadoras
+3. **Testes de controller e repositório.** Os 83 testes do backend cobrem A*, as calculadoras
    empíricas e o ciclo do pedido. CRUD e máquinas de status — o que muda mais — não têm rede de
    proteção. Precisaria de Testcontainers ou Postgres de teste, que não estão montados.
+4. **Revogar sessão antes do token expirar.** Bloquear ou excluir um acesso impede o **próximo**
+   login, não o que já está aberto: o token vale por si até o prazo acabar. Fechar isso exige
+   estado de sessão no servidor — uma leitura no banco por requisição —, que é justamente o que o
+   JWT existe para evitar. Com validade de uma hora, a janela é pequena; vale escrever, não
+   necessariamente construir.
 5. **Modo escuro de verdade.** Nenhum componente usa `dark:`; o escuro só repinta o `body`.
    Cartões, modais e inputs têm classe clara fixa.
 6. **Anexo de documento/foto.** Mock declarado nos dois lados. O bloqueio não é código, é decisão:
@@ -112,8 +116,10 @@ Em ordem de valor, na avaliação atual:
   duplicar overlay/cabeçalho/busca/estado vazio. Inventário no `CLAUDE.md`.
 - Abastecimentos referencia Veículo e Motorista por id; excluir um com abastecimentos é bloqueado,
   mesmo padrão de Unidade↔Produto.
-- `kmSincePrevious` de um abastecimento é calculado e congelado na criação — ver
-  `docs/superpowers/specs/2026-08-13-drivers-and-refuelings-registration-design.md`.
+- `kmSincePrevious` de um abastecimento **não** é guardado: é derivado do histórico de
+  odômetro toda vez que alguém precisa dele — na tela e no modelo de consumo. Guardá-lo
+  deixaria o valor velho no instante em que um odômetro digitado errado fosse corrigido.
+  Ver o comentário da migração `V7`.
 - O app do motorista tem superfície própria (`/api/mobile/**`), separada do CRUD do gestor: é
   escopada a uma rota pelo código de acesso, então o celular nunca segura id interno de rota.
 - A fila offline é **por rota**, não única. Com uma fila só, o evento pendente de ontem subia pra
@@ -139,4 +145,19 @@ Em ordem de valor, na avaliação atual:
   sinalizada por exceção, e o rollback apagaria justamente as linhas que importam.
 - A integração tem DTOs próprios, não os do painel: o que sai é contrato prometido a terceiro, e
   reusar as formas internas tornaria cada refatoração uma quebra pra quem integrou.
+- O token do painel viaja no cookie `httpOnly`, não num cabeçalho montado pela página: o
+  JavaScript não consegue lê-lo, e por isso um XSS também não. O filtro aceita
+  `Authorization` além do cookie para que a superfície seja testável fora do navegador.
+- Sem papéis. Autenticação e autorização são preocupações diferentes, e dividir admin de
+  operador multiplicaria os pontos onde dá para errar sem fechar nenhum buraco que a
+  autenticação já não tenha fechado.
+- O último acesso ativo não pode ser bloqueado nem excluído, e ninguém exclui o próprio:
+  sem isso, o conserto de um clique errado seria um `UPDATE` no banco.
+- O dashboard mostra estimativa de custo ao lado do combustível de fato abastecido, e não
+  um número só: eles medem coisas diferentes e não fecham entre si — o caminhão abastece
+  pra rodar tudo, inclusive o que nunca virou rota aqui. Juntá-los faria o gestor ler a
+  diferença como erro do modelo.
+- Consumo e preço de combustível são medidos na própria frota; pneu e hora de motorista
+  seguem constantes do experimento, porque não há cadastro de troca de pneu nem valor-hora.
+  A tela diz qual é qual em vez de apresentar tudo como apurado.
 - `frontend/` é protótipo congelado — não recebe feature nova.

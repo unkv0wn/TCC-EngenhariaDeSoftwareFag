@@ -137,7 +137,29 @@ project claims rather than lowering it.
 | FR-53 | Read surface | The integration surface **shall** expose orders, routes and deliveries for reading only, through its own response contract rather than the panel's, so that an internal refactor is not a breaking change for whoever integrated. External writes are **out of scope**. | US-21 |
 | FR-54 | Audit | Every integration request, accepted or refused, **shall** be recorded with its outcome, the path, the client (or the identifier attempted, when no client matches) and the instant. The record **shall** survive deletion of the credential it refers to. | US-21 |
 
-### 2.7 Platform
+### 2.7 Operational overview
+
+| ID | Category | Requirement | Source Story |
+|----|----------|-------------|--------------|
+| FR-61 | Overview | The system **shall** present, for a window of days chosen by the manager, the routes created and concluded, the distance driven, the stops served, the deliveries completed and the orders still waiting for a route. | US-23 |
+| FR-62 | Delivery series | Deliveries **shall** be counted by the instant the driver registered them in the field, not by the order's own date, and the series **shall** include days with no delivery so that the pace is not misread. | US-23 |
+| FR-63 | Cost estimate | The system **shall** estimate what the routes of the window cost, split into fuel, tyre wear and driver hours, applying the project's own cost model (FR-12's companion formula) to each route's totals. | US-23 |
+| FR-64 | Empirical input | Fuel consumption **shall** be measured from each vehicle's refuelling history — a distance-weighted rolling window — and the fuel price from what the fleet actually paid. A vehicle with fewer than two refuellings **shall** fall back to its profile's documented constant, and the interface **shall** state which of the two it is showing. | US-23 |
+| FR-65 | Honest reporting | The estimate **shall** be presented as an estimate, alongside the fuel actually purchased in the window, and **shall not** be described as recorded expenditure. Components the system has no data for — tyre replacement cost and driver hourly rate — **shall** be identified as model constants. | US-23 |
+| FR-66 | Derived distance | The distance run between refuellings **shall** be derived from the odometer history, never stored, so that correcting a mistyped reading corrects every figure that depends on it. A non-positive interval **shall** be skipped rather than divided by. | US-23 |
+
+### 2.8 Panel access
+
+| ID | Category | Requirement | Source Story |
+|----|----------|-------------|--------------|
+| FR-55 | Authentication | The manager **shall** authenticate at `POST /api/auth/login` with e-mail and password, checked against a BCrypt hash stored in the database. The endpoint previously issued a token for any e-mail without checking a password, and no manager user table existed. | US-22 |
+| FR-56 | Refusal detail | A wrong password and an unknown e-mail **shall** return the same HTTP 401 and the same message; an access blocked by the manager **shall** return HTTP 403, and only after the password has been verified, so that the refusal does not reveal that the account exists. | US-22 |
+| FR-57 | Enforcement | Every endpoint of the panel **shall** be refused without a valid manager session, `/api/mobile-users` and `/api/api-clients` included — the two registrations that grant access to the other two surfaces. The login endpoint is the single exception. | US-22 |
+| FR-58 | Session transport | The session token **shall** travel as an `httpOnly` cookie, unreadable by the page's own JavaScript, and the server **shall** additionally accept it in the `Authorization` header so the surface can be exercised by clients that have no cookie. | US-22 |
+| FR-59 | Access management | The manager **shall** be able to create, edit, block and delete panel accesses at `/api/users`, with passwords stored only as BCrypt hashes. | US-22 |
+| FR-60 | Lockout | The system **shall** refuse to block or delete the last active panel access, and **shall** refuse to let anyone delete their own, so that the panel cannot be closed from the inside with no way back except direct database access. | US-22 |
+
+### 2.9 Platform
 
 | ID | Category | Requirement | Source Story |
 |----|----------|-------------|--------------|
@@ -178,7 +200,9 @@ project claims rather than lowering it.
 | NFR-12 | The route access token **shall** be generated with `SecureRandom` and **shall** be treated as a bearer secret: it grants access to one route and is not authentication. |
 | NFR-13 | External service URLs **shall** be configurable and never hardcoded. |
 | NFR-14 | CORS origins **shall** be explicit. |
-| NFR-15 | **Open gap:** the manager API requires no authentication. `/api/auth/login` issues a token for any e-mail without checking a password, there is no manager user table, and every endpoint outside `/api/mobile/**` and `/api/integration/**` is reachable unauthenticated — including `/api/mobile-users`, which grants app access, and `/api/api-clients`, which creates integration credentials. The login flow protects pages in the Next.js layer only. A production deployment would have to close this before exposure. |
+| NFR-15 | The manager API **shall** require an authenticated session on every endpoint, enforced by a servlet filter outside Spring Security, and manager passwords **shall** be stored only as BCrypt hashes. Until this version the API required no authentication at all: a token was issued for any e-mail and the only credential check lived in the web client. |
+| NFR-33 | The session token **shall** be delivered to the browser as an `httpOnly` cookie, so that a cross-site scripting flaw in the panel cannot read it. Cross-origin requests therefore carry credentials, which obliges the allowed origins to remain explicit — a browser refuses the wildcard on a credentialed request. |
+| NFR-34 | **Open gap:** a session cannot be revoked before its token expires. Blocking or deleting an access stops the next login, not a session already in progress; the token is valid by its own signature for its remaining lifetime. |
 | NFR-27 | The driver surface `/api/mobile/**` **shall** require an authenticated driver session, enforced by a servlet filter outside Spring Security (only `spring-security-crypto` is present, for BCrypt). Driver tokens **shall** be distinguishable from manager tokens so that one cannot be presented as the other. |
 | NFR-28 | Driver passwords **shall** be stored only as BCrypt hashes, and **shall not** appear in any response or log. |
 | NFR-29 | **Open gap:** login attempts against the driver surface are not retained. Only the last successful login is stored (`mobile_users.last_login_at`); refusals reach the application log only, so a refused device leaves no trace the manager can read. |
@@ -206,6 +230,7 @@ project claims rather than lowering it.
 | NFR-24 | The whole stack **shall** be runnable with `docker compose up --build`, requiring only Docker on the host. |
 | NFR-25 | Database connection settings **shall** come from environment variables with local-development defaults. |
 | NFR-26 | The backend endpoint the driver app targets **shall** be a build-time parameter of the app, not a hardcoded address. |
+| NFR-35 | The overview **shall** be computed on the server and returned as a single summary, rather than assembled in the browser from full lists of routes, orders and refuellings. The cost model lives in the backend, and transferring whole collections to add six numbers would make the first screen the most expensive one. |
 
 ---
 
@@ -244,12 +269,14 @@ project claims rather than lowering it.
 | US-13 Save and dispatch | FR-27, FR-28, FR-24d | NFR-05, NFR-21 |
 | US-14 Share with driver | FR-29 | NFR-12 |
 | US-15 Track route | FR-30 … FR-33 | NFR-23 |
-| US-16 Sign in and open route | FR-34, FR-34a … FR-34h, FR-35, FR-36 | NFR-12, NFR-15, NFR-27, NFR-28, NFR-29 |
+| US-16 Sign in and open route | FR-34, FR-34a … FR-34h, FR-35, FR-36 | NFR-12, NFR-27, NFR-28, NFR-29 |
 | US-17 Ordered stops | FR-38 | NFR-05 |
 | US-18 Navigate | FR-39 | — |
 | US-19 Register events | FR-30, FR-31, FR-37, FR-24a, FR-24c, FR-24d, FR-24e, FR-24g | NFR-11 |
 | US-20 Work offline | FR-40, FR-41, FR-42, FR-24e | NFR-08, NFR-09, NFR-10 |
 | US-21 Integrate an external system | FR-47 … FR-54 | NFR-11, NFR-16, NFR-30, NFR-31, NFR-32 |
+| US-22 Panel access | FR-55 … FR-60 | NFR-11, NFR-15, NFR-16, NFR-33, NFR-34 |
+| US-23 Operational overview | FR-61 … FR-66 | NFR-05, NFR-35 |
 
 ---
 
@@ -269,7 +296,9 @@ project claims rather than lowering it.
 5. **The route code is not authentication.** It selects which route; the driver surface also
    requires a session and that the route belong to that driver, so holding the code alone reaches
    nothing. It can be regenerated.
-6. **Panel authentication, retained login attempts and CRUD test coverage are open gaps**
-   (NFR-15, NFR-23, NFR-29), stated so that the system is not evaluated as if they were closed.
+6. **Retained login attempts, session revocation and CRUD test coverage are open gaps**
+   (NFR-23, NFR-29, NFR-34), stated so that the system is not evaluated as if they were
+   closed. Panel authentication, listed here in the previous version, is no longer one of
+   them (NFR-15).
 7. **Document attachment is demonstrative.** Both the web tracking screen and the app show
    the final shape of the attachment list without storing files anywhere.
