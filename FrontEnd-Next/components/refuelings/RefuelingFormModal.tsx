@@ -12,7 +12,7 @@ import type { Driver } from "@/hooks/useDrivers";
 import type { Refueling } from "@/hooks/useRefuelings";
 import type { Vehicle } from "@/hooks/useVehicles";
 import { formatCurrency } from "@/lib/format";
-import { calculateKmSincePrevious, calculateTotalPrice, findLatestOdometer } from "@/lib/refuelingCalculations";
+import { calculateKmSincePrevious, calculateTotalPrice, findPreviousOdometer } from "@/lib/refuelingCalculations";
 import { refuelingSchema, type RefuelingFormData } from "@/lib/validations/refueling";
 
 const EMPTY_VALUES: Partial<RefuelingFormData> = {
@@ -61,7 +61,12 @@ export function RefuelingFormModal({
   const litersRefueled = watch("litersRefueled");
   const pricePerLiter = watch("pricePerLiter");
 
-  const previousOdometerKm = vehicleId ? findLatestOdometer(refuelings, vehicleId, refueling?.id) : null;
+  // Pela leitura digitada, e não pela mais recente do veículo: editando um registro
+  // antigo, a mais recente é posterior a ele e a prévia mostraria quilometragem negativa.
+  const previousOdometerKm =
+    vehicleId && Number.isFinite(odometerKm)
+      ? findPreviousOdometer(refuelings, vehicleId, odometerKm, refueling?.id)
+      : null;
   const kmSincePreviewValue =
     vehicleId && Number.isFinite(odometerKm) ? calculateKmSincePrevious(odometerKm, previousOdometerKm) : null;
 

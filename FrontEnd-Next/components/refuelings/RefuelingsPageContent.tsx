@@ -12,6 +12,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { usePagination } from "@/hooks/usePagination";
 import { RefuelingFormModal } from "@/components/refuelings/RefuelingFormModal";
+import { RefuelingSummary } from "@/components/refuelings/RefuelingSummary";
 import { RefuelingTable } from "@/components/refuelings/RefuelingTable";
 import { ALL_VEHICLES_VALUE, VehicleFilterSelect } from "@/components/refuelings/VehicleFilterSelect";
 import { useDrivers } from "@/hooks/useDrivers";
@@ -20,7 +21,7 @@ import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { ApiError } from "@/lib/apiClient";
 import { formatDate } from "@/lib/format";
-import { findLatestOdometer } from "@/lib/refuelingCalculations";
+import { odometerBounds } from "@/lib/refuelingCalculations";
 import type { RefuelingFormData } from "@/lib/validations/refueling";
 
 export function RefuelingsPageContent() {
@@ -56,6 +57,13 @@ export function RefuelingsPageContent() {
 
   const pagination = usePagination(filteredRefuelings);
 
+  /** Qual veículo está filtrado — o resumo muda de "frota" para "veículo" por causa dele. */
+  const filteredVehicleLabel = useMemo(() => {
+    if (vehicleFilter === ALL_VEHICLES_VALUE) return null;
+    const vehicle = vehicles.find((option) => option.id === vehicleFilter);
+    return vehicle ? `${vehicle.plate} — ${vehicle.model}` : null;
+  }, [vehicleFilter, vehicles]);
+
   function openCreateForm() {
     setFormRefueling(null);
     setIsFormOpen(true);
@@ -72,11 +80,24 @@ export function RefuelingsPageContent() {
   }
 
   async function handleSubmit(data: RefuelingFormData) {
-    const previousOdometerKm = findLatestOdometer(refuelings, data.vehicleId, formRefueling?.id);
-    if (previousOdometerKm !== null && data.odometerKm <= previousOdometerKm) {
+    // Data e odômetro têm que contar a mesma história: a leitura fica entre a do
+    // abastecimento anterior e a do seguinte, em data. A regra antiga — "maior que a
+    // leitura mais recente do veículo" — servia para um registro novo, mas tornava
+    // impossível corrigir um antigo, porque todo valor plausível para ele é menor.
+    const bounds = odometerBounds(refuelings, data.vehicleId, data.date, formRefueling?.id);
+
+    if (bounds.min !== null && data.odometerKm <= bounds.min) {
       error(
         "Odômetro inválido",
-        `Deve ser maior que o do abastecimento anterior deste veículo (${previousOdometerKm.toLocaleString("pt-BR")} km).`
+        `O abastecimento anterior deste veículo marcou ${bounds.min.toLocaleString("pt-BR")} km. A leitura precisa ser maior.`
+      );
+      return;
+    }
+
+    if (bounds.max !== null && data.odometerKm >= bounds.max) {
+      error(
+        "Odômetro inválido",
+        `O abastecimento seguinte deste veículo marcou ${bounds.max.toLocaleString("pt-BR")} km. A leitura precisa ser menor.`
       );
       return;
     }
@@ -130,6 +151,12 @@ export function RefuelingsPageContent() {
           />
         ) : (
           <>
+            {/*
+              O resumo descreve o conjunto filtrado, não a página: quem filtra um veículo
+              quer o gasto daquele veículo, e quem vira a página não quer que os totais
+              mudem embaixo dele.
+            */}
+            <RefuelingSummary refuelings={filteredRefuelings} vehicleLabel={filteredVehicleLabel} />
             <RefuelingTable
               refuelings={pagination.pageItems}
               vehicles={vehicles}
