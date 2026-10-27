@@ -3,7 +3,15 @@ import { Pencil, Trash2 } from "lucide-react";
 import { FUEL_TYPES } from "@/lib/validations/vehicle";
 import type { Vehicle } from "@/hooks/useVehicles";
 
-const TABLE_HEADINGS = ["Placa", "Modelo", "Marca", "Ano", "Capacidade", "Combustível", ""];
+const TABLE_HEADINGS = ["Placa", "Modelo", "Marca", "Ano", "Capacidade", "Odômetro", "Combustível", ""];
+
+const ODOMETER = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+/** Em branco quando o veículo não tem leitura nenhuma — zero km diria outra coisa. */
+function formatOdometer(km: number | null): string {
+  return km === null ? "—" : `${ODOMETER.format(km)} km`;
+}
+
 
 interface VehicleTableProps {
   vehicles: Vehicle[];
@@ -35,6 +43,9 @@ export function VehicleTable({ vehicles, onEdit, onDelete }: VehicleTableProps) 
               <td className="px-3.5 py-3 font-semibold text-gray-500">{vehicle.brand}</td>
               <td className="px-3.5 py-3 font-semibold text-gray-500">{vehicle.year}</td>
               <td className="px-3.5 py-3 font-semibold text-gray-500">{vehicle.capacityKg} kg</td>
+              <td className="px-3.5 py-3 font-semibold text-gray-500">
+                {formatOdometer(vehicle.currentOdometerKm)}
+              </td>
               <td className="px-3.5 py-3 font-semibold text-gray-500">
                 {FUEL_TYPES.find((option) => option.value === vehicle.fuelType)?.label}
               </td>

@@ -37,6 +37,17 @@ export const vehicleSchema = z.object({
     message: "Informe uma capacidade válida.",
   }),
   fuelType: z.enum(FUEL_VALUES, { message: "Selecione o tipo de combustível." }),
+  // Opcional de propósito: veículo já cadastrado não tem essa leitura, e exigi-la
+  // impediria de editá-lo. O input numérico vazio chega como NaN pelo valueAsNumber do
+  // react-hook-form, então NaN vale "não informado" — sem transform aqui, porque mudar o
+  // tipo de saída faz o resolver do react-hook-form deixar de casar com o do formulário.
+  // A normalização de NaN para null acontece em services/vehicles.ts.
+  initialOdometerKm: z
+    .union([z.number(), z.nan()])
+    .optional()
+    .refine((value) => value === undefined || Number.isNaN(value) || value >= 0, {
+      message: "Informe um odômetro válido.",
+    }),
 });
 
 export type VehicleFormData = z.infer<typeof vehicleSchema>;

@@ -13,6 +13,12 @@ import {
 
 export interface Vehicle extends VehicleFormData {
   id: string;
+  /**
+   * Maior leitura conhecida: a do cadastro ou a do último abastecimento, o que for
+   * maior. Vem derivado do servidor e não é editável — por isso fica aqui e não no
+   * `VehicleFormData`. Null quando o veículo não tem leitura nenhuma.
+   */
+  currentOdometerKm: number | null;
 }
 
 export function useVehicles() {

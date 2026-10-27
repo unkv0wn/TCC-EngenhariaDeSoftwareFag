@@ -39,6 +39,16 @@ public class Vehicle {
   @Column(name = "fuel_type", nullable = false, length = 10)
   private String fuelType;
 
+  /**
+   * Odômetro no dia do cadastro. Null quando não informado — ver V24: inventar um valor
+   * aqui vira consumo inventado, porque o modelo de custo mede distância a partir daqui.
+   *
+   * <p>Não existe campo de "odômetro atual": esse é a maior leitura conhecida e é
+   * derivado em leitura, pelo mesmo motivo da V7.
+   */
+  @Column(name = "initial_odometer_km")
+  private Double initialOdometerKm;
+
   @CreationTimestamp
   @Column(name = "created_at", updatable = false, nullable = false)
   private Instant createdAt;
@@ -60,6 +70,14 @@ public class Vehicle {
     this.color = color;
     this.capacityKg = capacityKg;
     this.fuelType = fuelType;
+  }
+
+  public Double getInitialOdometerKm() {
+    return initialOdometerKm;
+  }
+
+  public void setInitialOdometerKm(Double initialOdometerKm) {
+    this.initialOdometerKm = initialOdometerKm;
   }
 
   public UUID getId() {

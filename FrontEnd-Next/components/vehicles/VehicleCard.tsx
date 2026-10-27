@@ -6,6 +6,13 @@ import { cn } from "@/lib/utils";
 import type { Vehicle } from "@/hooks/useVehicles";
 import { FUEL_TYPES, type FuelType } from "@/lib/validations/vehicle";
 
+const ODOMETER = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+/** Em branco quando o veículo não tem leitura nenhuma — zero km diria outra coisa. */
+function formatOdometer(km: number | null): string {
+  return km === null ? "—" : `${ODOMETER.format(km)} km`;
+}
+
 const FUEL_BADGE_STYLES: Record<FuelType, string> = {
   diesel: "bg-success-50 text-success-700",
   gasolina: "bg-danger-50 text-danger-700",
@@ -61,6 +68,12 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
         <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-[11.5px] font-semibold text-gray-500">
           <span>Capacidade</span>
           <span className="font-extrabold text-gray-900">{vehicle.capacityKg} kg</span>
+        </div>
+        <div className="flex items-center justify-between text-[11.5px] font-semibold text-gray-500">
+          <span>Odômetro</span>
+          <span className="font-extrabold text-gray-900">
+            {formatOdometer(vehicle.currentOdometerKm)}
+          </span>
         </div>
       </button>
     </div>

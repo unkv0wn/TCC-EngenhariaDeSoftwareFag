@@ -161,6 +161,14 @@ export function VehicleFormModal({ vehicle, onClose, onSubmit }: VehicleFormModa
             {...register("capacityKg", { valueAsNumber: true })}
           />
         </div>
+        <Input
+          label="Odômetro no cadastro (km)"
+          type="number"
+          placeholder="Opcional"
+          hint="A leitura de hoje. A partir daqui o odômetro acompanha os abastecimentos."
+          error={errors.initialOdometerKm?.message}
+          {...register("initialOdometerKm", { valueAsNumber: true })}
+        />
         <Controller
           name="fuelType"
           control={control}

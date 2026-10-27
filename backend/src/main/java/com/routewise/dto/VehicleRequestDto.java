@@ -30,6 +30,10 @@ public record VehicleRequestDto(
 
   @NotBlank(message = "Informe o tipo de combustível.")
   @Pattern(regexp = "^(diesel|gasolina|etanol|eletrico)$", message = "Tipo de combustível inválido.")
-  String fuelType
+  String fuelType,
+
+  /** Opcional: veículo já cadastrado não tem essa leitura, e exigi-la bloquearia editá-lo. */
+  @PositiveOrZero(message = "Informe um odômetro válido.")
+  Double initialOdometerKm
 
 ) {}

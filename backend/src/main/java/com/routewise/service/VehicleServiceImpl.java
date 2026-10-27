@@ -4,11 +4,14 @@ import com.routewise.dto.VehicleDto;
 import com.routewise.dto.VehicleRequestDto;
 import com.routewise.entity.Vehicle;
 import com.routewise.exception.ResourceNotFoundException;
+import com.routewise.repository.RefuelingRepository;
 import com.routewise.repository.VehicleRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -16,15 +19,20 @@ import java.util.UUID;
 public class VehicleServiceImpl implements IVehicleService {
 
   private final VehicleRepository repository;
+  private final RefuelingRepository refuelingRepository;
 
-  public VehicleServiceImpl(VehicleRepository repository) {
+  public VehicleServiceImpl(VehicleRepository repository, RefuelingRepository refuelingRepository) {
     this.repository = repository;
+    this.refuelingRepository = refuelingRepository;
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<VehicleDto> findAll() {
-    return repository.findAll().stream().map(this::toDto).toList();
+    Map<UUID, Double> lastOdometers = lastOdometerByVehicle();
+    return repository.findAll().stream()
+      .map(vehicle -> toDto(vehicle, lastOdometers.get(vehicle.getId())))
+      .toList();
   }
 
   @Override
@@ -39,6 +47,7 @@ public class VehicleServiceImpl implements IVehicleService {
       request.capacityKg(),
       request.fuelType()
     );
+    entity.setInitialOdometerKm(request.initialOdometerKm());
     return toDto(repository.save(entity));
   }
 
@@ -52,6 +61,7 @@ public class VehicleServiceImpl implements IVehicleService {
     entity.setColor(request.color());
     entity.setCapacityKg(request.capacityKg());
     entity.setFuelType(request.fuelType());
+    entity.setInitialOdometerKm(request.initialOdometerKm());
     return toDto(repository.save(entity));
   }
 
@@ -68,7 +78,24 @@ public class VehicleServiceImpl implements IVehicleService {
       .orElseThrow(() -> new ResourceNotFoundException("Veículo não encontrado: " + id));
   }
 
+  /** Maior odômetro já abastecido, por veículo. */
+  private Map<UUID, Double> lastOdometerByVehicle() {
+    Map<UUID, Double> byVehicle = new HashMap<>();
+    for (Object[] row : refuelingRepository.findMaxOdometerByVehicle()) {
+      byVehicle.put((UUID) row[0], (Double) row[1]);
+    }
+    return byVehicle;
+  }
+
   private VehicleDto toDto(Vehicle entity) {
+    return toDto(entity, lastOdometerByVehicle().get(entity.getId()));
+  }
+
+  /**
+   * @param lastRefueledOdometerKm maior leitura abastecida deste veículo, ou null se não
+   *                               houver abastecimento
+   */
+  private VehicleDto toDto(Vehicle entity, Double lastRefueledOdometerKm) {
     return new VehicleDto(
       entity.getId(),
       entity.getPlate(),
@@ -77,7 +104,23 @@ public class VehicleServiceImpl implements IVehicleService {
       entity.getYear(),
       entity.getColor(),
       entity.getCapacityKg(),
-      entity.getFuelType()
+      entity.getFuelType(),
+      entity.getInitialOdometerKm(),
+      currentOdometer(entity.getInitialOdometerKm(), lastRefueledOdometerKm)
     );
+  }
+
+  /**
+   * Odômetro atual: a maior das duas leituras conhecidas.
+   *
+   * <p>O máximo, e não "a do último abastecimento", porque as duas podem discordar — um
+   * veículo cadastrado com 80.000 km cujo primeiro abastecimento foi lançado com 79.500
+   * por erro de digitação não deve passar a marcar menos do que já marcava. Null quando
+   * não há leitura nenhuma, que é diferente de zero.
+   */
+  private Double currentOdometer(Double initialKm, Double lastRefueledKm) {
+    if (initialKm == null) return lastRefueledKm;
+    if (lastRefueledKm == null) return initialKm;
+    return Math.max(initialKm, lastRefueledKm);
   }
 }

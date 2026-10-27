@@ -5,15 +5,18 @@ import { cn } from "@/lib/utils";
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   error?: string;
+  /** Texto de apoio sob o campo. Some quando há erro — dois textos competindo confundem. */
+  hint?: string;
   startIcon?: React.ReactNode;
   endAdornment?: React.ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, startIcon, endAdornment, id, ...props }, ref) => {
+  ({ className, label, error, hint, startIcon, endAdornment, id, ...props }, ref) => {
     const generatedId = useId();
     const inputId = id ?? generatedId;
     const errorId = `${inputId}-error`;
+    const hintId = `${inputId}-hint`;
 
     return (
       <div className="flex flex-col gap-1.5">
@@ -35,7 +38,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             aria-invalid={!!error}
-            aria-describedby={error ? errorId : undefined}
+            aria-describedby={error ? errorId : hint ? hintId : undefined}
             className={cn(
               "w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-gray-900",
               "placeholder:text-gray-400",
@@ -57,6 +60,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             </span>
           )}
         </div>
+        {!error && hint && (
+          <p id={hintId} className="text-xs font-medium text-gray-500">
+            {hint}
+          </p>
+        )}
         {error && (
           <p
             id={errorId}

@@ -12,7 +12,12 @@ import type { Driver } from "@/hooks/useDrivers";
 import type { Refueling } from "@/hooks/useRefuelings";
 import type { Vehicle } from "@/hooks/useVehicles";
 import { formatCurrency } from "@/lib/format";
-import { calculateKmSincePrevious, calculateTotalPrice, findPreviousOdometer } from "@/lib/refuelingCalculations";
+import {
+  calculateKmSincePrevious,
+  calculateTotalPrice,
+  findPreviousOdometer,
+  odometerBounds,
+} from "@/lib/refuelingCalculations";
 import { refuelingSchema, type RefuelingFormData } from "@/lib/validations/refueling";
 
 const EMPTY_VALUES: Partial<RefuelingFormData> = {
@@ -58,6 +63,7 @@ export function RefuelingFormModal({
 
   const vehicleId = watch("vehicleId");
   const odometerKm = watch("odometerKm");
+  const date = watch("date");
   const litersRefueled = watch("litersRefueled");
   const pricePerLiter = watch("pricePerLiter");
 
@@ -75,6 +81,31 @@ export function RefuelingFormModal({
     : kmSincePreviewValue === null
       ? "Primeiro abastecimento registrado para este veículo."
       : `Km rodado desde o último: ${kmSincePreviewValue.toLocaleString("pt-BR")} km`;
+
+  // A leitura de referência de quem está digitando.
+  //
+  // Num registro novo é o odômetro atual do veículo — a maior leitura conhecida, que o
+  // servidor deriva do cadastro e dos abastecimentos. Era o número que faltava na tela:
+  // sem ele, lançar um abastecimento exigia ir procurar o último registro do veículo.
+  //
+  // Na edição esse número não serve: ele inclui o próprio registro que está sendo
+  // editado, então "última leitura: 15.650" enquanto se edita o registro de 15.650 é
+  // circular. O que importa ali é a faixa em que a leitura pode cair — a mesma regra que
+  // o salvamento aplica, mostrada antes de recusar em vez de depois.
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === vehicleId);
+
+  const bounds =
+    isEditing && vehicleId && date
+      ? odometerBounds(refuelings, vehicleId, date, refueling?.id)
+      : null;
+
+  const odometerHint = !vehicleId
+    ? undefined
+    : bounds
+      ? boundsLabel(bounds)
+      : selectedVehicle?.currentOdometerKm != null
+        ? `Odômetro atual do veículo: ${selectedVehicle.currentOdometerKm.toLocaleString("pt-BR")} km`
+        : "Veículo sem leitura registrada — esta será a primeira.";
 
   const totalPreviewLabel =
     Number.isFinite(litersRefueled) && Number.isFinite(pricePerLiter)
@@ -124,6 +155,7 @@ export function RefuelingFormModal({
               label="Odômetro atual (km)"
               type="number"
               placeholder="15650"
+              hint={odometerHint}
               error={errors.odometerKm?.message}
               {...register("odometerKm", { valueAsNumber: true })}
             />
@@ -162,4 +194,13 @@ export function RefuelingFormModal({
       </form>
     </Modal>
   );
+}
+
+/** Faixa em que a leitura editada pode cair, em texto — null em qualquer das pontas é "sem registro daquele lado". */
+function boundsLabel({ min, max }: { min: number | null; max: number | null }): string {
+  const km = (value: number) => `${value.toLocaleString("pt-BR")} km`;
+  if (min !== null && max !== null) return `Entre ${km(min)} e ${km(max)}, pelos abastecimentos vizinhos.`;
+  if (min !== null) return `Acima de ${km(min)}, do abastecimento anterior.`;
+  if (max !== null) return `Abaixo de ${km(max)}, do abastecimento seguinte.`;
+  return "Único abastecimento deste veículo.";
 }
