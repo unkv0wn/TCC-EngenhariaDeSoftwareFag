@@ -33,6 +33,7 @@ public class JwtService {
     private static final String CLAIM_DRIVER_ID = "driverId";
     private static final String CLAIM_DEVICE_ID = "deviceId";
     private static final String CLAIM_SCOPES = "scopes";
+    private static final String CLAIM_API_CLIENT_ID = "apiClientId";
     private static final String CLAIM_USER_ID = "userId";
     private static final String CLAIM_NAME = "name";
 
@@ -96,9 +97,10 @@ public class JwtService {
      * o que torna a checagem de escopo barata. O preço é que revogar um escopo só vale
      * para o próximo token — por isso a validade é curta.
      */
-    public String generateIntegrationToken(String clientId, Set<String> scopes) {
+    public String generateIntegrationToken(String clientId, UUID apiClientId, Set<String> scopes) {
         return generateToken(clientId, Map.of(
                 CLAIM_TYPE, TYPE_INTEGRATION,
+                CLAIM_API_CLIENT_ID, apiClientId.toString(),
                 CLAIM_SCOPES, String.join(",", scopes)
         ));
     }
@@ -156,7 +158,12 @@ public class JwtService {
                     ? Set.of()
                     : new LinkedHashSet<>(Arrays.stream(raw.split(",")).map(String::trim).toList());
 
-            return Optional.of(new IntegrationSession(claims.getSubject(), scopes));
+            // O id interno entrou depois do resto. Um token da hora anterior não o tem, e
+            // recusá-lo por isso derrubaria integrações no ar para resolver um campo de log.
+            String rawId = claims.get(CLAIM_API_CLIENT_ID, String.class);
+            UUID apiClientId = rawId == null ? null : UUID.fromString(rawId);
+
+            return Optional.of(new IntegrationSession(claims.getSubject(), apiClientId, scopes));
         } catch (JwtException | IllegalArgumentException ex) {
             return Optional.empty();
         }

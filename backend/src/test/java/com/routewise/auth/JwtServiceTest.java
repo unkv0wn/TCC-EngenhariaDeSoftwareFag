@@ -39,7 +39,7 @@ class JwtServiceTest {
   }
 
   private String integrationToken() {
-    return jwt.generateIntegrationToken("rw_id_teste", Set.of("orders:read"));
+    return jwt.generateIntegrationToken("rw_id_teste", UUID.randomUUID(), Set.of("orders:read"));
   }
 
   @Test

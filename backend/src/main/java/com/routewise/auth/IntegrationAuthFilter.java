@@ -95,7 +95,7 @@ public class IntegrationAuthFilter extends OncePerRequestFilter {
     String required = requiredScope(path);
 
     if (required == null || !current.hasScope(required)) {
-      audit.record(null, current.clientId(), method, path,
+      audit.record(current.apiClientId(), current.clientId(), method, path,
         IntegrationRequestLog.OUTCOME_MISSING_SCOPE, 403);
       log.warn("Integration request without scope {}: {} {}", required, method, path);
       write(response, HttpStatus.FORBIDDEN, "Insufficient Scope",
@@ -105,7 +105,8 @@ public class IntegrationAuthFilter extends OncePerRequestFilter {
       return;
     }
 
-    audit.record(null, current.clientId(), method, path, IntegrationRequestLog.OUTCOME_SUCCESS, 200);
+    audit.record(current.apiClientId(), current.clientId(), method, path,
+      IntegrationRequestLog.OUTCOME_SUCCESS, 200);
     request.setAttribute(SESSION_ATTRIBUTE, current);
     chain.doFilter(request, response);
   }

@@ -148,7 +148,7 @@ public class ApiClientServiceImpl implements IApiClientService {
 
     List<String> scopes = List.copyOf(client.getScopeSet());
     return new IntegrationTokenResponseDto(
-      jwtService.generateIntegrationToken(client.getClientId(), client.getScopeSet()),
+      jwtService.generateIntegrationToken(client.getClientId(), client.getId(), client.getScopeSet()),
       TOKEN_TYPE,
       expirationMs / 1000,
       scopes
