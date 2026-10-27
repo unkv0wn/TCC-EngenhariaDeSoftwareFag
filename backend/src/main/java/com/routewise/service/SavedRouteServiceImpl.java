@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.routewise.auth.RouteAccessCodeGenerator;
+import com.routewise.dto.RouteCostDto;
 import com.routewise.dto.SavedRouteDto;
 import com.routewise.dto.SavedRouteRequestDto;
 import com.routewise.entity.SavedRoute;
@@ -36,17 +37,20 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
   private final ObjectMapper objectMapper;
   private final RouteAccessCodeGenerator codeGenerator;
   private final RouteOrderLifecycle orderLifecycle;
+  private final RouteCostingService costingService;
 
   public SavedRouteServiceImpl(
     SavedRouteRepository repository,
     ObjectMapper objectMapper,
     RouteAccessCodeGenerator codeGenerator,
-    RouteOrderLifecycle orderLifecycle
+    RouteOrderLifecycle orderLifecycle,
+    RouteCostingService costingService
   ) {
     this.repository = repository;
     this.objectMapper = objectMapper;
     this.codeGenerator = codeGenerator;
     this.orderLifecycle = orderLifecycle;
+    this.costingService = costingService;
   }
 
   @Override
@@ -59,6 +63,34 @@ public class SavedRouteServiceImpl implements ISavedRouteService {
   @Transactional(readOnly = true)
   public SavedRouteDto findById(UUID id) {
     return toDto(findOrThrow(id));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public RouteCostDto cost(UUID id) {
+    SavedRoute route = findOrThrow(id);
+    RouteCostingService.RouteCost cost = costingService.costOf(route);
+
+    double distanceKm = route.getTotalDistanceKm();
+    return new RouteCostDto(
+      cost.breakdown().fuelLiters(),
+      cost.breakdown().fuelCost(),
+      cost.breakdown().tireCost(),
+      cost.breakdown().driverCost(),
+      cost.breakdown().total(),
+      // Rota sem distância não tem R$/km — dividir daria infinito, que a tela mostraria
+      // como um número.
+      distanceKm > 0 ? cost.breakdown().total() / distanceKm : 0.0,
+      distanceKm,
+      route.getTotalDurationMin(),
+      cost.cargoWeightKg(),
+      cost.profile().label(),
+      cost.profile().capacityKg(),
+      cost.consumptionLPer100Km(),
+      cost.consumptionMeasured(),
+      cost.fuelPricePerLiter(),
+      cost.fuelPriceMeasured()
+    );
   }
 
   @Override

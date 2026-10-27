@@ -1,5 +1,6 @@
 package com.routewise.controller;
 
+import com.routewise.dto.RouteCostDto;
 import com.routewise.dto.RouteStatusRequestDto;
 import com.routewise.dto.SavedRouteDto;
 import com.routewise.dto.SavedRouteRequestDto;
@@ -53,6 +54,15 @@ public class SavedRouteController {
   @PostMapping("/{id}/access-code")
   public SavedRouteDto regenerateAccessCode(@PathVariable UUID id) {
     return service.regenerateAccessCode(id);
+  }
+
+  /**
+   * Custo estimado da rota. {@code /{id}/cost} não colide com {@code /events/{requestId}}
+   * do RouteController: lá o literal está no primeiro segmento, aqui no segundo.
+   */
+  @GetMapping("/{id}/cost")
+  public RouteCostDto cost(@PathVariable UUID id) {
+    return service.cost(id);
   }
 
   @DeleteMapping("/{id}")

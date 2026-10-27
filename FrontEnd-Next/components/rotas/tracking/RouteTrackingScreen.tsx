@@ -13,9 +13,11 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { DocumentsPanel } from "@/components/rotas/tracking/DocumentsPanel";
 import { EventFormModal } from "@/components/rotas/tracking/EventFormModal";
 import { EventsPanel } from "@/components/rotas/tracking/EventsPanel";
+import { RouteCostPanel } from "@/components/rotas/tracking/RouteCostPanel";
 import { StopsPanel } from "@/components/rotas/tracking/StopsPanel";
 import { TrackingTabs, type TrackingTab } from "@/components/rotas/tracking/TrackingTabs";
 import { useDrivers } from "@/hooks/useDrivers";
+import { useRouteCost } from "@/hooks/useRouteCost";
 import { useRouteEvents, type RouteEvent } from "@/hooks/useRouteEvents";
 import { useRoutes, type RouteStatus } from "@/hooks/useRoutes";
 import { useToast } from "@/hooks/useToast";
@@ -58,6 +60,7 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
   const { drivers } = useDrivers();
   const { vehicles } = useVehicles();
   const { success, error: showError } = useToast();
+  const { cost, isLoading: isLoadingCost, error: costError } = useRouteCost(routeId);
   const {
     events,
     deliveredStopIndexes,
@@ -207,13 +210,17 @@ export function RouteTrackingScreen({ routeId }: RouteTrackingScreenProps) {
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
-              <div className="h-[560px] overflow-hidden rounded-xl border border-gray-200 bg-white">
-                <RouteMap
-                  result={route.result}
-                  stops={route.stops}
-                  selectedStop={selectedStop}
-                  onSelectStop={selectStopFromMap}
-                />
+              <div className="flex min-w-0 flex-col gap-4">
+                <div className="h-[560px] overflow-hidden rounded-xl border border-gray-200 bg-white">
+                  <RouteMap
+                    result={route.result}
+                    stops={route.stops}
+                    selectedStop={selectedStop}
+                    onSelectStop={selectStopFromMap}
+                  />
+                </div>
+
+                <RouteCostPanel cost={cost} isLoading={isLoadingCost} error={costError} />
               </div>
 
               <div className="flex flex-col gap-3">

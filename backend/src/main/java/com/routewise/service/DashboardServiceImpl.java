@@ -2,19 +2,13 @@ package com.routewise.service;
 
 import com.routewise.dto.DashboardDto;
 import com.routewise.entity.Order;
-import com.routewise.entity.OrderItem;
-import com.routewise.entity.Product;
 import com.routewise.entity.Refueling;
 import com.routewise.entity.SavedRoute;
 import com.routewise.entity.Vehicle;
 import com.routewise.repository.OrderRepository;
-import com.routewise.repository.ProductRepository;
 import com.routewise.repository.RefuelingRepository;
 import com.routewise.repository.SavedRouteRepository;
-import com.routewise.repository.VehicleRepository;
 import com.routewise.service.RouteCostEstimator.CostBreakdown;
-import com.routewise.validation.EmpiricalFuelConsumptionCalculator;
-import com.routewise.validation.EmpiricalFuelConsumptionCalculator.RefuelingRecord;
 import com.routewise.validation.VehicleProfile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,14 +16,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -44,7 +36,9 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li><strong>Operação</strong> — contagem direta de rotas, entregas e pedidos. Dado.</li>
  *   <li><strong>Consumo e preço</strong> — medidos nos abastecimentos da própria frota,
- *       quando existem. Dado, com janela móvel.</li>
+ *       quando existem. Dado — e medido na frota inteira, não na janela da tela: cinco
+ *       abastecimentos descrevem o veículo, e ignorá-los por serem antigos trocaria uma
+ *       medição por uma constante. É também o que a tela de cada rota usa.</li>
  *   <li><strong>Custo</strong> — estimativa do modelo do TCC
  *       ({@link RouteCostEstimator}), não despesa registrada. Pneu e hora de motorista
  *       são constantes documentadas do experimento, porque o sistema não cadastra troca
@@ -71,27 +65,24 @@ public class DashboardServiceImpl implements IDashboardService {
   private final SavedRouteRepository routeRepository;
   private final OrderRepository orderRepository;
   private final RefuelingRepository refuelingRepository;
-  private final VehicleRepository vehicleRepository;
-  private final ProductRepository productRepository;
   private final RouteStopResolver stopResolver;
   private final RouteCostEstimator costEstimator;
+  private final RouteCostingService costingService;
 
   public DashboardServiceImpl(
     SavedRouteRepository routeRepository,
     OrderRepository orderRepository,
     RefuelingRepository refuelingRepository,
-    VehicleRepository vehicleRepository,
-    ProductRepository productRepository,
     RouteStopResolver stopResolver,
-    RouteCostEstimator costEstimator
+    RouteCostEstimator costEstimator,
+    RouteCostingService costingService
   ) {
     this.routeRepository = routeRepository;
     this.orderRepository = orderRepository;
     this.refuelingRepository = refuelingRepository;
-    this.vehicleRepository = vehicleRepository;
-    this.productRepository = productRepository;
     this.stopResolver = stopResolver;
     this.costEstimator = costEstimator;
+    this.costingService = costingService;
   }
 
   @Override
@@ -104,22 +95,18 @@ public class DashboardServiceImpl implements IDashboardService {
     List<SavedRoute> routes = routeRepository.findByCreatedAtGreaterThanEqual(from);
     List<Order> delivered = orderRepository.findByDeliveredAtGreaterThanEqual(from);
     List<Refueling> allRefuelings = refuelingRepository.findAll();
-    Map<UUID, Vehicle> vehicles = vehicleRepository.findAll().stream()
-      .collect(Collectors.toMap(Vehicle::getId, Function.identity()));
 
-    // Consumo medido por veículo, da janela móvel do calculador empírico. Vale para a
-    // frota inteira, não só para a janela do relatório: cinco abastecimentos descrevem o
-    // veículo, e descartá-los por serem de 40 dias atrás seria jogar fora a medição para
-    // usar uma constante.
+    // Consumo, preço e carga vêm do RouteCostingService, que é o mesmo caminho usado pela
+    // tela de uma rota só. Montá-los aqui também faria o total do dashboard divergir da
+    // soma das rotas que ele conta no dia em que uma das regras mudasse.
+    RouteCostingService.FleetInputs inputs = costingService.inputsFor(routes);
+    Map<UUID, Vehicle> vehicles = inputs.vehicles();
+
     Map<UUID, List<Refueling>> refuelingsByVehicle = allRefuelings.stream()
       .collect(Collectors.groupingBy(Refueling::getVehicleId));
 
-    Map<UUID, Double> consumptionByVehicle = new HashMap<>();
-    for (Map.Entry<UUID, List<Refueling>> entry : refuelingsByVehicle.entrySet()) {
-      VehicleProfile profile = costEstimator.profileFor(vehicles.get(entry.getKey()));
-      consumptionByVehicle.put(entry.getKey(), measuredConsumption(entry.getValue(), profile));
-    }
-
+    // O que a frota de fato gastou na janela — diferente do preço usado no custeio, que é
+    // o da frota inteira. Esta linha responde "quanto saiu do caixa nestes dias".
     List<Refueling> inWindow = allRefuelings.stream()
       .filter(refueling -> !refueling.getDate().isBefore(fromDate))
       .toList();
@@ -128,39 +115,12 @@ public class DashboardServiceImpl implements IDashboardService {
       .mapToDouble(r -> r.getLitersRefueled() * r.getPricePerLiter())
       .sum();
 
-    // Preço médio ponderado pelos litros: um abastecimento de 200 L pesa mais do que um
-    // de 20 L na conta de quanto a frota paga por litro.
-    boolean priceMeasured = refueledLiters > 0;
-    double fuelPrice = priceMeasured
-      ? refueledCost / refueledLiters
-      : VehicleProfile.defaultProfile().fuelPricePerLiter();
-
-    Map<UUID, Double> weightByOrder = cargoWeightByOrder(routes);
-
     CostBreakdown cost = CostBreakdown.zero();
     Map<UUID, Double> distanceByVehicle = new HashMap<>();
     int stops = 0;
 
     for (SavedRoute route : routes) {
-      Vehicle vehicle = vehicles.get(route.getVehicleId());
-      VehicleProfile profile = costEstimator.profileFor(vehicle);
-      double consumption = consumptionByVehicle.getOrDefault(
-        route.getVehicleId(), profile.baseFuelConsumptionLPer100Km()
-      );
-
-      double cargoKg = stopResolver.allOrderIds(route).stream()
-        .mapToDouble(orderId -> weightByOrder.getOrDefault(orderId, 0.0))
-        .sum();
-
-      cost = cost.plus(costEstimator.estimate(
-        route.getTotalDistanceKm(),
-        route.getTotalDurationMin(),
-        cargoKg,
-        profile,
-        consumption,
-        fuelPrice
-      ));
-
+      cost = cost.plus(costingService.costOf(route, inputs).breakdown());
       stops += stopResolver.countStops(route);
       distanceByVehicle.merge(route.getVehicleId(), route.getTotalDistanceKm(), Double::sum);
     }
@@ -187,59 +147,14 @@ public class DashboardServiceImpl implements IDashboardService {
         distanceKm > 0 ? cost.total() / distanceKm : 0.0,
         refueledLiters,
         refueledCost,
-        fuelPrice,
-        priceMeasured
+        inputs.fuelPricePerLiter(),
+        inputs.fuelPriceMeasured()
       ),
-      vehicleConsumptions(vehicles, refuelingsByVehicle, consumptionByVehicle, distanceByVehicle),
+      vehicleConsumptions(
+        vehicles, refuelingsByVehicle, inputs.consumptionByVehicle(), distanceByVehicle
+      ),
       dailyDeliveries(delivered, fromDate, today)
     );
-  }
-
-  /**
-   * Consumo medido nos abastecimentos do veículo, ou a constante do perfil.
-   *
-   * <p>O {@code kmSincePrevious} de cada abastecimento é derivado aqui, e não lido de
-   * uma coluna: a migração {@code V7} deixou esse campo fora da tabela de propósito,
-   * para que editar um registro antigo não deixe os seguintes desatualizados. Ordena-se
-   * por odômetro, e a diferença para o anterior é a distância daquele tanque.
-   */
-  private double measuredConsumption(List<Refueling> refuelings, VehicleProfile profile) {
-    List<Refueling> ordered = refuelings.stream()
-      .sorted(Comparator.comparingDouble(Refueling::getOdometerKm))
-      .toList();
-
-    List<RefuelingRecord> log = new ArrayList<>();
-    for (int i = 1; i < ordered.size(); i++) {
-      double km = ordered.get(i).getOdometerKm() - ordered.get(i - 1).getOdometerKm();
-      // Odômetro que não andou, ou andou para trás, é erro de digitação — e dividir por
-      // ele daria consumo infinito, que contaminaria a média de toda a frota.
-      if (km <= 0) continue;
-      log.add(new RefuelingRecord(
-        ordered.get(i).getDate().toString(),
-        ordered.get(i).getLitersRefueled(),
-        km
-      ));
-    }
-
-    return EmpiricalFuelConsumptionCalculator.consumptionLPer100Km(
-      log, profile.baseFuelConsumptionLPer100Km()
-    );
-  }
-
-  /** Peso de cada pedido que alguma rota da janela entrega, somando item × peso do produto. */
-  private Map<UUID, Double> cargoWeightByOrder(List<SavedRoute> routes) {
-    List<UUID> orderIds = routes.stream().flatMap(route -> stopResolver.allOrderIds(route).stream()).distinct().toList();
-    if (orderIds.isEmpty()) return Map.of();
-
-    Map<UUID, Double> productWeights = productRepository.findAll().stream()
-      .collect(Collectors.toMap(Product::getId, Product::getWeightKg));
-
-    return orderRepository.findAllById(orderIds).stream().collect(Collectors.toMap(
-      Order::getId,
-      order -> order.getItems().stream()
-        .mapToDouble(item -> item.getQuantity() * productWeights.getOrDefault(item.getProductId(), 0.0))
-        .sum()
-    ));
   }
 
   private List<DashboardDto.VehicleConsumption> vehicleConsumptions(
