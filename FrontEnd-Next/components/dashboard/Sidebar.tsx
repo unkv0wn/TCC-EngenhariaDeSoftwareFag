@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
@@ -18,10 +18,12 @@ import {
   Ruler,
   Settings,
   Smartphone,
+  UserCog,
   Users,
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchCurrentUser } from "@/services/panelUsers";
 
 interface NavLeafItem {
   href: string;
@@ -185,6 +187,16 @@ function NavGroup({ label, items, subgroups, pathname }: NavGroupData & { pathna
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
+
+  // Quem está logado vem do servidor porque o cookie é httpOnly — a página não consegue
+  // abrir o token. Falha em silêncio de propósito: se a sessão caiu, o `apiClient` já
+  // manda para o login, e não cabe a um rodapé de menu dar a notícia.
+  useEffect(() => {
+    fetchCurrentUser()
+      .then((user) => setCurrentUser({ name: user.name, email: user.email }))
+      .catch(() => setCurrentUser(null));
+  }, []);
 
   async function handleLogout() {
     await fetch("/api/logout", { method: "POST" });
@@ -206,6 +218,18 @@ export function Sidebar() {
 
       <div className="mt-auto pt-3">
         <div className="mb-2 border-t border-gray-100" />
+        {currentUser && (
+          <div className="mb-1 px-2.5 py-1.5">
+            <p className="truncate text-[13px] font-extrabold text-gray-900">{currentUser.name}</p>
+            <p className="truncate text-[11.5px] font-semibold text-gray-400">{currentUser.email}</p>
+          </div>
+        )}
+        <NavItem
+          icon={UserCog}
+          label="Usuários"
+          href="/dashboard/usuarios"
+          active={isNavItemActive("/dashboard/usuarios", pathname)}
+        />
         <NavItem
           icon={Settings}
           label="Configurações"

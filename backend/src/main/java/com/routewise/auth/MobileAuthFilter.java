@@ -25,14 +25,15 @@ import java.util.Optional;
  * ser uma regra do app e passa a ser uma regra do servidor.
  *
  * <p>É um filtro de servlet simples, e não Spring Security: entrar com o starter traria
- * uma cadeia que protege {@code /api/**} inteiro de uma vez, e o CRUD do painel hoje não
- * tem autenticação nenhuma para oferecer (ver {@code AuthController}). O recorte aqui é
- * exatamente a superfície do celular.
+ * uma cadeia única para {@code /api/**}, e são três superfícies com credenciais
+ * diferentes — esta, a da integração e a do painel (ver {@link PanelAuthFilter}). O
+ * recorte aqui é exatamente a superfície do celular.
  *
  * <p>O que este filtro <strong>não</strong> faz: conferir se a rota pedida pertence ao
- * motorista do token. Hoje o acesso continua sendo pelo código da rota; o token prova que
- * é um motorista cadastrado, num aparelho cadastrado, não que seja o motorista daquela
- * rota. Amarrar as duas coisas é passo separado.
+ * motorista do token. Isso é checado uma camada abaixo, em
+ * {@code MobileRouteServiceImpl.requireRoute}, onde a rota já foi buscada — aqui ainda
+ * não se sabe qual é. O token prova que é um motorista cadastrado num aparelho
+ * cadastrado; de quem é a rota é pergunta para quem tem a rota em mãos.
  */
 public class MobileAuthFilter extends OncePerRequestFilter {
 

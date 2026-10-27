@@ -21,16 +21,20 @@ import java.util.UUID;
 public class JwtService {
 
     /**
-     * Separa o token do app do token do painel. Os dois saem da mesma chave, então sem
-     * marca de origem um token do painel — que o backend emite para qualquer e-mail, sem
-     * conferir senha — passaria pelo filtro do app como se fosse uma sessão de motorista.
+     * Separa as três superfícies. Os três tokens saem da mesma chave, então sem marca de
+     * origem um valeria pelo outro — e a conta não fecha em nenhuma direção: o token do
+     * painel não deveria registrar entrega em nome de um motorista, e o da integração,
+     * que é só de leitura, não deveria abrir o CRUD do gestor.
      */
     private static final String CLAIM_TYPE = "typ";
     private static final String TYPE_MOBILE = "mobile";
     private static final String TYPE_INTEGRATION = "integration";
+    private static final String TYPE_PANEL = "panel";
     private static final String CLAIM_DRIVER_ID = "driverId";
     private static final String CLAIM_DEVICE_ID = "deviceId";
     private static final String CLAIM_SCOPES = "scopes";
+    private static final String CLAIM_USER_ID = "userId";
+    private static final String CLAIM_NAME = "name";
 
     private final SecretKey key;
     private final long expirationMs;
@@ -60,6 +64,22 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * Sessão do painel, emitida depois de conferir a senha em {@code panel_users}.
+     *
+     * <p>Antes desta versão o token do painel não levava marca nenhuma, e era emitido
+     * para qualquer e-mail sem conferir senha. Token antigo não passa mais: falta-lhe a
+     * claim, e quem estiver com o cookie de ontem cai na tela de login. É o efeito
+     * esperado de passar a exigir credencial, não um defeito.
+     */
+    public String generatePanelToken(String email, UUID userId, String name) {
+        return generateToken(email, Map.of(
+                CLAIM_TYPE, TYPE_PANEL,
+                CLAIM_USER_ID, userId.toString(),
+                CLAIM_NAME, name
+        ));
+    }
+
     /** Sessão do app do motorista, amarrada ao aparelho em que o login aconteceu. */
     public String generateMobileToken(String username, UUID driverId, String deviceId) {
         return generateToken(username, Map.of(
@@ -81,6 +101,35 @@ public class JwtService {
                 CLAIM_TYPE, TYPE_INTEGRATION,
                 CLAIM_SCOPES, String.join(",", scopes)
         ));
+    }
+
+    /**
+     * Lê uma sessão de painel de um token.
+     *
+     * <p>Vazio para token de motorista, token de integração e token sem tipo — este
+     * último é o formato anterior, emitido sem conferir senha; aceitá-lo manteria a
+     * porta aberta justamente para quem já tivesse um.
+     */
+    public Optional<PanelSession> parsePanelSession(String token) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            if (!TYPE_PANEL.equals(claims.get(CLAIM_TYPE, String.class))) {
+                return Optional.empty();
+            }
+
+            return Optional.of(new PanelSession(
+                    UUID.fromString(claims.get(CLAIM_USER_ID, String.class)),
+                    claims.getSubject(),
+                    claims.get(CLAIM_NAME, String.class)
+            ));
+        } catch (JwtException | IllegalArgumentException ex) {
+            return Optional.empty();
+        }
     }
 
     /**

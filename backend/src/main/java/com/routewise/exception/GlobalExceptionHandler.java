@@ -217,6 +217,30 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
   }
 
+  // ── Login do painel: credencial inválida ─────────────────────────────────
+
+  @ExceptionHandler(PanelAuthException.class)
+  public ResponseEntity<ProblemDetail> handlePanelAuth(PanelAuthException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
+    problem.setTitle("Unauthorized");
+    problem.setDetail(ex.getMessage());
+    // Sem o e-mail tentado no log, mesmo motivo do app: log de aplicação circula por
+    // lugares que credencial não deveria alcançar.
+    log.warn("Panel login refused: bad credentials");
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+  }
+
+  // ── Login do painel: acesso bloqueado ────────────────────────────────────
+
+  @ExceptionHandler(PanelAccessBlockedException.class)
+  public ResponseEntity<ProblemDetail> handlePanelBlocked(PanelAccessBlockedException ex) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
+    problem.setTitle("Forbidden");
+    problem.setDetail(ex.getMessage());
+    log.warn("Panel login refused: access blocked");
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+  }
+
   // ── Integração: credencial inválida ──────────────────────────────────────
 
   @ExceptionHandler(IntegrationAuthException.class)

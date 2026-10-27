@@ -24,8 +24,8 @@ import java.util.Optional;
  *
  * <p>Mesmo desenho do {@link MobileAuthFilter}: filtro de servlet simples, fora do Spring
  * Security, recortado a um prefixo. Entrar com o starter de segurança protegeria
- * {@code /api/**} inteiro de uma vez, e o CRUD do gestor ainda não tem autenticação para
- * oferecer.
+ * {@code /api/**} inteiro de uma vez, com uma cadeia só — e as três superfícies aceitam
+ * credenciais diferentes.
  *
  * <p>O escopo é decidido aqui, e não em cada controller, porque é uma regra do caminho e
  * não da regra de negócio: espalhá-la pelos métodos faria cada endpoint novo depender de

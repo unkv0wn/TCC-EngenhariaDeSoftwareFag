@@ -30,7 +30,11 @@ public class CorsConfig {
           .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
           .allowedHeaders("*")
           .exposedHeaders("Content-Type", "X-Request-ID")
-          .allowCredentials(false)
+          // Preciso para o cookie de sessão do painel: sem isto o navegador não manda o
+          // `routewise` numa chamada para outra porta, e todo o CRUD responderia 401.
+          // É o que obriga as origens a serem explícitas — com credenciais, o curinga
+          // `*` é recusado pelo próprio navegador, não só por política nossa.
+          .allowCredentials(true)
           .maxAge(3600);
       }
     };
