@@ -47,7 +47,9 @@ public class RouteOrderLifecycle {
 
   private static final Logger log = LoggerFactory.getLogger(RouteOrderLifecycle.class);
 
-  private static final String FATURADO = "faturado";
+  /** Público porque o dashboard conta quantos pedidos esperam rota — um quarto literal
+   *  solto pelo código é como as duas máquinas de status já saíram de sincronia antes. */
+  public static final String FATURADO = "faturado";
   private static final String EM_ROTA = "em_rota";
   private static final String ENTREGUE = "entregue";
 

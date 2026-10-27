@@ -43,7 +43,7 @@ public final class CostMatrixBuilder {
    * before load and road-surface adjustment. Depends only on the vehicle, so it is
    * computed once per profile rather than per edge.
    */
-  static double baseTireWearPerKm(VehicleProfile profile) {
+  public static double baseTireWearPerKm(VehicleProfile profile) {
     double wearPerKm = 0.0;
     for (AxlePosition position : AxlePosition.values()) {
       int tires = profile.axleLayout().tireCount(position);
