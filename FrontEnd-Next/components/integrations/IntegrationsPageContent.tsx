@@ -12,6 +12,12 @@ import { ApiClientFormModal } from "@/components/integrations/ApiClientFormModal
 import { ApiClientSecretModal } from "@/components/integrations/ApiClientSecretModal";
 import { ApiClientTable } from "@/components/integrations/ApiClientTable";
 import { IntegrationLogTable } from "@/components/integrations/IntegrationLogTable";
+import {
+  ALL_CLIENTS_VALUE,
+  IntegrationLogClientFilter,
+} from "@/components/integrations/IntegrationLogClientFilter";
+import { Pagination } from "@/components/ui/Pagination";
+import { usePagination } from "@/hooks/usePagination";
 import { useApiClients, type ApiClient, type ApiClientCreated } from "@/hooks/useApiClients";
 import { useToast } from "@/hooks/useToast";
 import { ApiError } from "@/lib/apiClient";
@@ -21,9 +27,11 @@ export function IntegrationsPageContent() {
   const {
     apiClients,
     logs,
+    isLoadingLogs,
+    logsError,
+    refreshLogs,
     isLoading,
     error: loadError,
-    refresh,
     createApiClient,
     updateApiClient,
     regenerateSecret,
@@ -36,6 +44,16 @@ export function IntegrationsPageContent() {
   const [created, setCreated] = useState<ApiClientCreated | null>(null);
   const [clientToDelete, setClientToDelete] = useState<ApiClient | null>(null);
   const [clientToRegenerate, setClientToRegenerate] = useState<ApiClient | null>(null);
+  const [logClient, setLogClient] = useState<string>(ALL_CLIENTS_VALUE);
+
+  // 10 por página: o registro é uma tabela densa de uma linha por chamada, e a tela
+  // mostrava as 100 de uma vez — scroll sem fim e sem noção de quantas são.
+  const logPagination = usePagination(logs, 10);
+
+  function changeLogClient(value: string) {
+    setLogClient(value);
+    refreshLogs(value === ALL_CLIENTS_VALUE ? undefined : value);
+  }
 
   function openCreateForm() {
     setFormClient(null);
@@ -108,19 +126,49 @@ export function IntegrationsPageContent() {
                     sendo usada por quem não deveria.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={refresh}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
-                >
-                  Atualizar
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <IntegrationLogClientFilter
+                    value={logClient}
+                    onChange={changeLogClient}
+                    apiClients={apiClients}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      refreshLogs(logClient === ALL_CLIENTS_VALUE ? undefined : logClient)
+                    }
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-bold text-gray-600 hover:bg-gray-50"
+                  >
+                    Atualizar
+                  </button>
+                </div>
               </div>
 
-              {logs.length === 0 ? (
-                <EmptyState message="Nenhum acesso registrado ainda." />
+              {isLoadingLogs ? (
+                <LoadingState message="Carregando o registro..." />
+              ) : logsError ? (
+                <EmptyState message={logsError} />
+              ) : logs.length === 0 ? (
+                <EmptyState
+                  message={
+                    logClient === ALL_CLIENTS_VALUE
+                      ? "Nenhum acesso registrado ainda."
+                      : "Nenhum acesso registrado para esta integração."
+                  }
+                />
               ) : (
-                <IntegrationLogTable logs={logs} />
+                <>
+                  <IntegrationLogTable logs={logPagination.pageItems} />
+                  <Pagination
+                    page={logPagination.page}
+                    totalPages={logPagination.totalPages}
+                    from={logPagination.from}
+                    to={logPagination.to}
+                    total={logPagination.total}
+                    itemLabel="chamadas"
+                    onPageChange={logPagination.setPage}
+                  />
+                </>
               )}
             </section>
           </>

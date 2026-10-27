@@ -67,7 +67,10 @@ public class ApiClientController {
    * <p>Paginado por obrigação: é a única tabela do projeto que cresce por requisição.
    */
   @GetMapping("/logs")
-  public List<IntegrationRequestLogDto> logs(@RequestParam(defaultValue = "100") int limit) {
-    return logs.recent(limit);
+  public List<IntegrationRequestLogDto> logs(
+    @RequestParam(defaultValue = "100") int limit,
+    @RequestParam(required = false) UUID clientId
+  ) {
+    return logs.recent(limit, clientId);
   }
 }

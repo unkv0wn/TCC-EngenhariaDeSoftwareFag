@@ -30,6 +30,14 @@ export function deleteApiClient(id: string): Promise<void> {
   return apiFetch<void>(`${BASE_PATH}/${id}`, { method: "DELETE" });
 }
 
-export function listIntegrationLogs(limit = 100): Promise<IntegrationLogEntry[]> {
-  return apiFetch<IntegrationLogEntry[]>(`${BASE_PATH}/logs?limit=${limit}`);
+/**
+ * Registro de acesso, opcionalmente de uma integração só.
+ *
+ * O filtro vai como parâmetro e não é aplicado na tela porque o `limit` do servidor
+ * corta antes: recortar as 100 linhas mais recentes de todas as integrações mostraria
+ * quase nada de uma que parou de chamar semana passada.
+ */
+export function listIntegrationLogs(limit = 100, clientId?: string): Promise<IntegrationLogEntry[]> {
+  const query = clientId ? `?limit=${limit}&clientId=${clientId}` : `?limit=${limit}`;
+  return apiFetch<IntegrationLogEntry[]>(`${BASE_PATH}/logs${query}`);
 }

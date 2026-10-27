@@ -15,4 +15,14 @@ public interface IntegrationRequestLogRepository extends JpaRepository<Integrati
    * sozinha com o tempo.
    */
   List<IntegrationRequestLog> findAllByOrderByOccurredAtDesc(Pageable pageable);
+
+  List<IntegrationRequestLog> findByApiClientIdOrderByOccurredAtDesc(UUID apiClientId, Pageable pageable);
+
+  /**
+   * Recusas que não chegaram a identificar um client.
+   *
+   * <p>São as que mais interessam ao gestor — secret errado, client inexistente — e sem
+   * esta consulta ficariam sem filtro próprio, já que {@code apiClientId} é nulo nelas.
+   */
+  List<IntegrationRequestLog> findByApiClientIdIsNullOrderByOccurredAtDesc(Pageable pageable);
 }

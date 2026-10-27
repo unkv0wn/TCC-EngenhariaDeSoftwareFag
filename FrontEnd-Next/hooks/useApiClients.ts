@@ -43,6 +43,8 @@ export interface ApiClientCreated {
 
 export interface IntegrationLogEntry {
   id: string;
+  /** Null quando a chamada não chegou a identificar a integração — ver `attemptedClientId`. */
+  apiClientId: string | null;
   clientName: string | null;
   attemptedClientId: string | null;
   method: string;
@@ -56,7 +58,9 @@ export function useApiClients() {
   const [apiClients, setApiClients] = useState<ApiClient[]>([]);
   const [logs, setLogs] = useState<IntegrationLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logsError, setLogsError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -81,6 +85,25 @@ export function useApiClients() {
       refresh();
     });
   }, [refresh]);
+
+  /**
+   * Recarrega só o registro, para o filtro por integração.
+   *
+   * Separado do `refresh` porque trocar o filtro não deveria apagar a tabela de
+   * integrações da tela — ela não muda, e fazê-la piscar a cada troca faria o filtro
+   * parecer mais caro do que é.
+   */
+  const refreshLogs = useCallback(async (clientId?: string) => {
+    setIsLoadingLogs(true);
+    setLogsError(null);
+    try {
+      setLogs(await listIntegrationLogs(100, clientId));
+    } catch (err) {
+      setLogsError(err instanceof ApiError ? err.message : "Não foi possível carregar o registro.");
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, []);
 
   const createApiClient = useCallback(async (data: ApiClientFormData) => {
     const created = await createApiClientApi(data);
@@ -108,6 +131,9 @@ export function useApiClients() {
   return {
     apiClients,
     logs,
+    isLoadingLogs,
+    logsError,
+    refreshLogs,
     isLoading,
     error,
     refresh,

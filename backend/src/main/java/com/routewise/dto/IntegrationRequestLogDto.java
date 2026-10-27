@@ -12,6 +12,8 @@ import java.util.UUID;
  */
 public record IntegrationRequestLogDto(
   UUID id,
+  /** Null quando a chamada não chegou a identificar um client — ver attemptedClientId. */
+  UUID apiClientId,
   String clientName,
   String attemptedClientId,
   String method,
