@@ -28,15 +28,35 @@ cada máquina tem o seu. Trocar o valor depois derruba os logins em aberto — �
 Na raiz do projeto (onde está este arquivo):
 
 ```bash
-docker compose up --build
+docker compose up -d
 ```
 
-A primeira vez demora alguns minutos (baixa as imagens e compila tudo). Da segunda
-vez em diante é bem mais rápido — pode rodar só `docker compose up`.
+Só isso. A primeira vez demora alguns minutos — compila o backend com Maven e o
+frontend com o Next; depois sobe em segundos, porque as imagens já existem.
 
-Quando aparecer o backend subindo (`Started RouteWiseApplication`), acessa:
+O `-d` devolve o terminal e deixa a stack rodando. Para ver o que está acontecendo:
+
+```bash
+docker compose logs -f
+```
+
+Mudou código? Aí sim precisa reconstruir a imagem:
+
+```bash
+docker compose up -d --build
+```
+
+Quando os três serviços estiverem de pé, acessa:
 
 **http://localhost:3000**
+
+Não precisa esperar nem conferir ordem: o backend só sobe depois que o banco
+responde, e o frontend só sobe depois que o backend atende na 8080. Sem isso a tela
+abria antes de a API existir e o primeiro login falhava, o que parece defeito do
+sistema e é só ordem de subida.
+
+Os serviços têm `restart: unless-stopped`, então voltam sozinhos depois de reiniciar
+a máquina — contanto que o Docker Desktop esteja aberto.
 
 ## Login
 
@@ -45,9 +65,10 @@ Quando aparecer o backend subindo (`Started RouteWiseApplication`), acessa:
 | E-mail | `teste@routewise.com` |
 | Senha | `12345678` |
 
-> É um login fixo de demonstração — o sistema ainda não tem cadastro de
-> usuário/senha "de verdade" (isso não é um bug do Docker, é assim mesmo na versão
-> atual do projeto).
+> É uma credencial de demonstração, fraca e pública de propósito: o repositório é
+> aberto. A autenticação em si é real — senha com BCrypt na tabela `panel_users`,
+> criada pela migration `V23`. Dá para trocar a senha e criar outros acessos em
+> **Usuários**, e o sistema impede bloquear ou excluir o último acesso ativo.
 
 ## O que já vem pronto (sem precisar cadastrar nada)
 
@@ -79,6 +100,19 @@ zero (reaplica os seeds):
 ```bash
 docker compose down -v
 ```
+
+## Só o banco, com o backend rodando fora do container
+
+Para desenvolver com `mvn spring-boot:run` e `pnpm dev`, sobe só o Postgres:
+
+```bash
+docker compose up -d db
+```
+
+O `backend/docker-compose.yml` faz a mesma coisa e aponta para o **mesmo** banco —
+mesmo container, mesma porta, mesmo volume. Eram dois bancos distintos com o mesmo
+nome de serviço na 5434, e subir pelo arquivo errado dava um sistema que ligava,
+logava e aparecia vazio, sem nenhum erro indicando que o banco não era aquele.
 
 ## Portas usadas
 

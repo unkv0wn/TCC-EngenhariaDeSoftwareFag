@@ -1,7 +1,19 @@
+# Só o Postgres, para quando o backend roda fora de container (`mvn spring-boot:run`)
+# ou pela IDE. A stack inteira está no docker-compose.yml da raiz.
+#
+# Este arquivo e o da raiz apontam para o MESMO banco, de propósito: mesmo nome de
+# container, mesma porta, mesmo volume. Eram dois bancos separados — dois volumes com
+# o mesmo nome de serviço na porta 5434 — e o resultado era que subir pelo arquivo
+# "errado" dava um sistema que ligava, logava e aparecia vazio, sem nenhum erro para
+# indicar que o banco não era aquele. Não dê a este serviço um volume próprio.
+#
+# O nome do volume é fixado com `name:` porque o Compose prefixa volumes com o nome do
+# projeto (a pasta): daqui o projeto é "backend", da raiz é "tcc", e sem o nome fixo os
+# dois voltariam a criar volumes diferentes.
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
-    container_name: routewise-postgres
+    container_name: routewise-db
     environment:
       POSTGRES_DB: routewise
       POSTGRES_USER: routewise
@@ -9,12 +21,13 @@ services:
     ports:
       - "5434:5432"
     volumes:
-      - routewise-postgres-data:/var/lib/postgresql/data
+      - routewise-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U routewise -d routewise"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
 volumes:
-  routewise-postgres-data:
+  routewise-db-data:
+    name: tcc_routewise-db-data

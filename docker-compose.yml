@@ -1,6 +1,11 @@
-# Stack completa do RouteWise (banco + backend + frontend) pra rodar com um
-# `docker compose up` só — pensado pra mandar pra alguém testar sem precisar
-# instalar Java/Node/Postgres na máquina. Ver README-DOCKER.md.
+# Stack completa do RouteWise (banco + backend + frontend). Da raiz do projeto:
+#
+#   docker compose up -d
+#
+# Na primeira vez ele constrói as imagens (alguns minutos: Maven + build do Next).
+# Depois sobe em segundos. Mudou código? `docker compose up -d --build`.
+#
+# Precisa de JWT_SECRET no .env da raiz (veja .env.example). Ver README-DOCKER.md.
 services:
   db:
     image: postgres:16-alpine
@@ -18,10 +23,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   backend:
     build:
       context: ./backend
+    image: routewise-backend
     container_name: routewise-backend
     environment:
       DB_HOST: db
@@ -36,6 +43,22 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # O Tomcat só abre a 8080 depois que o contexto subiu e o Flyway migrou — banco
+    # inacessível derruba a aplicação e a porta nunca abre. Então "porta aberta" aqui
+    # significa "pronto para servir". Feito com /dev/tcp porque a imagem JRE não traz
+    # curl nem wget, e instalar um só para isso custaria uma camada apt.
+    #
+    # É CMD + bash, não CMD-SHELL: CMD-SHELL roda /bin/sh, que no Ubuntu é o dash, e
+    # /dev/tcp é recurso do bash. No dash a checagem falha com "Directory nonexistent"
+    # — o container fica unhealthy com a aplicação funcionando perfeitamente, e o
+    # frontend nunca sobe porque espera por ele.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    restart: unless-stopped
 
   frontend:
     build:
@@ -44,6 +67,7 @@ services:
         # Endpoint que o NAVEGADOR usa (fora do container) — por isso é localhost,
         # não o nome do serviço docker.
         NEXT_PUBLIC_API_URL: http://localhost:8080
+    image: routewise-frontend
     container_name: routewise-frontend
     environment:
       # Endpoint que o próprio servidor Next.js usa (dentro da rede docker) pra
@@ -57,8 +81,17 @@ services:
       NODE_ENV: production
     ports:
       - "3000:3000"
+    # service_healthy, e não só "started": sem isso a tela abre antes de a API existir
+    # e o primeiro login falha, o que parece defeito do sistema e não ordem de subida.
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   routewise-db-data:
+    # Nome fixo porque o Compose prefixa volumes com o nome do projeto (a pasta). Sem
+    # isso, subir de outra pasta — ou pelo backend/docker-compose.yml, cujo projeto é
+    # "backend" — criaria OUTRO banco, vazio, sem nenhum erro dizendo que mudou. Já
+    # aconteceu: o sistema sobe, loga e aparece sem dados.
+    name: tcc_routewise-db-data
